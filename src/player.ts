@@ -277,17 +277,12 @@ function buildPlan(midi: Midi, tracks: number[]): Plan {
   for (const i of tracks) for (const n of midi.tracks[i].notes) notes.push({ t: n.time, m: n.midi + CFG.transpose, v: n.velocity, d: n.duration });
   notes.sort((a, b) => a.t - b.t || a.m - b.m);
   const lo = CFG.lowC, hi = lo + 35;
-  const distanceOutside = (m: number, shift: number) => {
-    const value = m + shift;
-    return value < lo ? lo - value : value > hi ? value - hi : 0;
-  };
-  // Prefer the candidate that preserves the original register. A global
-  // octave shift is only worthwhile when it reduces more distortion than the
-  // shift itself; this prevents one high note from moving an entire song.
+  // Preserve the existing automatic register selection so introducing
+  // nearest mode does not transpose an entire song unexpectedly.
   let shift = 0, best = Infinity;
   for (const candidate of [0, -12, 12, -24, 24, -36, 36]) {
-    const distortion = notes.reduce((sum, note) => sum + distanceOutside(note.m, candidate) + Math.abs(candidate), 0);
-    if (distortion < best) { best = distortion; shift = candidate; }
+    const outside = notes.filter(note => note.m + candidate < lo || note.m + candidate > hi).length;
+    if (outside < best) { best = outside; shift = candidate; }
   }
   let folded = 0;
   for (const n of notes) {
