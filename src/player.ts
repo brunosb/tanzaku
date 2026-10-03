@@ -272,7 +272,50 @@ async function checkTranscriptionDependencies() {
 }
 async function acquire(input: string): Promise<Acquired> { if (fs.existsSync(input)) return { buf: fs.readFileSync(input), title: path.basename(input, path.extname(input)), source: input }; if (isYoutubeUrl(input)) { console.log('⬇ Baixando e transcrevendo o áudio do YouTube...'); const result = await transcribeYoutube(input); const saved = addLibrary(result.title, result.buf, input); console.log(`✔ MIDI salvo na biblioteca como ${saved.file}`); return { ...result, source: input, generated: true }; } if (/^https?:\/\//i.test(input)) return { buf: await downloadUrl(input), title: path.basename(new URL(input).pathname) || 'musica', source: input }; console.log(`🔎 Buscando "${input}"...`); const results = await searchBitmidi(input); if (!results.length) throw new Error('Nenhum resultado encontrado.'); results.forEach((r, i) => console.log(`  ${i + 1}) ${r.title}`)); const n = flags.yes ? 1 : Number(await ask('Escolha [1]: ')) || 1, pick = results[Math.max(0, Math.min(n - 1, results.length - 1))]; return { buf: await downloadBitmidi(pick.page), title: pick.title, source: pick.page }; }
 
-function buildPlan(midi: Midi, tracks: number[]): Plan { const notes: { t: number; m: number; v: number; d: number }[] = []; for (const i of tracks) for (const n of midi.tracks[i].notes) notes.push({ t: n.time, m: n.midi + CFG.transpose, v: n.velocity, d: n.duration }); notes.sort((a, b) => a.t - b.t || a.m - b.m); const lo = CFG.lowC, hi = lo + 35; let shift = 0, best = Infinity; for (const candidate of [0, -12, 12, -24, 24, -36, 36]) { const out = notes.filter(n => n.m + candidate < lo || n.m + candidate > hi).length; if (out < best) { best = out; shift = candidate; } } let folded = 0; for (const n of notes) { n.m += shift; const before = n.m; while (n.m < lo) n.m += 12; while (n.m > hi) n.m -= 12; if (n.m !== before) folded++; } const groups: (typeof notes[number])[][] = []; for (const note of notes) { const last = groups.at(-1); if (last && note.t - last[0].t <= CFG.chordWindow) last.push(note); else groups.push([note]); } let dropped = 0; const output = groups.map(group => { const uniq = [...new Map(group.map(n => [n.m, n])).values()].sort((a, b) => a.m - b.m); let keep = uniq; if (uniq.length > CFG.maxPoly) { const edge = CFG.maxPoly === 1 ? [uniq.at(-1)!] : [uniq[0], uniq.at(-1)!]; keep = [...edge, ...uniq.filter(n => !edge.includes(n)).sort((a, b) => b.v - a.v)].slice(0, CFG.maxPoly); } dropped += group.length - keep.length; return { t: group[0].t, hold: Math.max(CFG.holdMs / 1000, ...keep.map(n => n.d)), keys: keep.map(n => midiToKey(n.m)).filter((k): k is Key => !!k) }; }).filter(group => group.keys.length); return { groups: output, duration: output.length ? output.at(-1)!.t + 0.5 : 0, stats: { notes: notes.length, groups: output.length, shift, folded, dropped } }; }
+function buildPlan(midi: Midi, tracks: number[]): Plan {
+  const notes: { t: number; m: number; v: number; d: number }[] = [];
+  for (const i of tracks) for (const n of midi.tracks[i].notes) notes.push({ t: n.time, m: n.midi + CFG.transpose, v: n.velocity, d: n.duration });
+  notes.sort((a, b) => a.t - b.t || a.m - b.m);
+  const lo = CFG.lowC, hi = lo + 35;
+  const distanceOutside = (m: number, shift: number) => {
+    const value = m + shift;
+    return value < lo ? lo - value : value > hi ? value - hi : 0;
+  };
+  // Prefer the candidate that preserves the original register. A global
+  // octave shift is only worthwhile when it reduces more distortion than the
+  // shift itself; this prevents one high note from moving an entire song.
+  let shift = 0, best = Infinity;
+  for (const candidate of [0, -12, 12, -24, 24, -36, 36]) {
+    const distortion = notes.reduce((sum, note) => sum + distanceOutside(note.m, candidate) + Math.abs(candidate), 0);
+    if (distortion < best) { best = distortion; shift = candidate; }
+  }
+  let folded = 0;
+  for (const n of notes) {
+    n.m += shift;
+    const before = n.m;
+    // nearest mode: clamp to the closest playable key instead of wrapping to
+    // another octave, which can turn a high note into the wrong semitone.
+    n.m = Math.max(lo, Math.min(hi, n.m));
+    if (n.m !== before) folded++;
+  }
+  const groups: (typeof notes[number])[][] = [];
+  for (const note of notes) {
+    const last = groups.at(-1);
+    if (last && note.t - last[0].t <= CFG.chordWindow) last.push(note); else groups.push([note]);
+  }
+  let dropped = 0;
+  const output = groups.map(group => {
+    const uniq = [...new Map(group.map(n => [n.m, n])).values()].sort((a, b) => a.m - b.m);
+    let keep = uniq;
+    if (uniq.length > CFG.maxPoly) {
+      const edge = CFG.maxPoly === 1 ? [uniq.at(-1)!] : [uniq[0], uniq.at(-1)!];
+      keep = [...edge, ...uniq.filter(n => !edge.includes(n)).sort((a, b) => b.v - a.v)].slice(0, CFG.maxPoly);
+    }
+    dropped += group.length - keep.length;
+    return { t: group[0].t, hold: Math.max(CFG.holdMs / 1000, ...keep.map(n => n.d)), keys: keep.map(n => midiToKey(n.m)).filter((k): k is Key => !!k) };
+  }).filter(group => group.keys.length);
+  return { groups: output, duration: output.length ? output.at(-1)!.t + 0.5 : 0, stats: { notes: notes.length, groups: output.length, shift, folded, dropped } };
+}
 function tracePlan(plan: Plan) {
   console.log('\nDiagnóstico do plano (tempo → teclas):');
   plan.groups.forEach((group, index) => {
