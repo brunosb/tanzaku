@@ -277,8 +277,6 @@ function buildPlan(midi: Midi, tracks: number[]): Plan {
   for (const i of tracks) for (const n of midi.tracks[i].notes) notes.push({ t: n.time, m: n.midi + CFG.transpose, v: n.velocity, d: n.duration });
   notes.sort((a, b) => a.t - b.t || a.m - b.m);
   const lo = CFG.lowC, hi = lo + 35;
-  // Preserve the existing automatic register selection so introducing
-  // nearest mode does not transpose an entire song unexpectedly.
   let shift = 0, best = Infinity;
   for (const candidate of [0, -12, 12, -24, 24, -36, 36]) {
     const outside = notes.filter(note => note.m + candidate < lo || note.m + candidate > hi).length;
@@ -288,9 +286,8 @@ function buildPlan(midi: Midi, tracks: number[]): Plan {
   for (const n of notes) {
     n.m += shift;
     const before = n.m;
-    // nearest mode: clamp to the closest playable key instead of wrapping to
-    // another octave, which can turn a high note into the wrong semitone.
-    n.m = Math.max(lo, Math.min(hi, n.m));
+    while (n.m < lo) n.m += 12;
+    while (n.m > hi) n.m -= 12;
     if (n.m !== before) folded++;
   }
   const groups: (typeof notes[number])[][] = [];
