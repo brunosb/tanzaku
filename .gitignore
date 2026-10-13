@@ -3,3 +3,11 @@ node_modules/
 dist/
 *.log
 npm-debug.log*
+
+/midi-cache/**
+!midi-cache/.gitkeep
+midi-cache/library.json
+midi-cache/settings.json
+*.mid
+.plan-cache/
+dist-electron/

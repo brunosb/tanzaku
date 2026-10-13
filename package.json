@@ -1,27 +1,57 @@
 {
-  "name": "wwm-player",
-  "version": "1.0.0",
-  "description": "Toca MIDI no modo de música livre de Where Winds Meet (36 teclas)",
-  "main": "dist/player.js",
-  "scripts": {
-    "start": "tsx src/player.ts",
-    "dev": "nodemon --watch src --ext ts --exec tsx src/player.ts",
-    "build": "tsc",
-    "test": "npm run build && node --test test/*.test.js"
-  },
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@tonejs/midi": "^2.0.28",
-    "koffi": "^3.3.2",
-    "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "devDependencies": {
-    "@types/node": "^26.6.4",
-    "nodemon": "^3.1.14"
-  }
+    "name": "wwm-player",
+    "version": "1.0.0",
+    "description": "Toca MIDI no modo de música livre de Where Winds Meet (36 teclas)",
+    "main": "dist-electron/electron/main.js",
+    "scripts": {
+        "start": "tsx src/player.ts",
+        "start:electron": "node tools/run-electron.cjs dist-electron/electron/main.js",
+        "cli": "tsx src/player.ts",
+        "dev": "nodemon --watch src --ext ts --exec tsx src/player.ts",
+        "dev:electron": "nodemon --watch src --ext ts,html,css --exec \"npm run build:electron && npm run start:electron\"",
+        "build": "tsc",
+        "build:electron": "tsc -p tsconfig.electron.json",
+        "format": "biome format --write .",
+        "format:check": "biome check .",
+        "lint": "biome lint .",
+        "check": "biome check .",
+        "dist": "npm run build:electron && electron-builder",
+        "test": "npm run check && npm run build && node --test test/*.test.js"
+    },
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "@tonejs/midi": "^2.0.28",
+        "koffi": "^3.3.2",
+        "tsx": "^4.19.2",
+        "typescript": "^5.6.3"
+    },
+    "engines": {
+        "node": ">=18"
+    },
+    "build": {
+        "appId": "com.wwmplayer.desktop",
+        "productName": "WWM Player",
+        "asar": true,
+        "files": [
+            "dist-electron/**/*",
+            "src/renderer/**/*",
+            "tools/youtube_to_midi.py",
+            "package.json"
+        ],
+        "win": {
+            "target": "nsis"
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true
+        }
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^2.5.15",
+        "@types/node": "^26.6.4",
+        "electron": "^44.7.1",
+        "electron-builder": "^26.15.3",
+        "nodemon": "^3.1.14"
+    }
 }
