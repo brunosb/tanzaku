@@ -1,0 +1,38 @@
+{
+    "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+    "formatter": {
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineEnding": "lf"
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "single"
+        }
+    },
+    "assist": {
+        "actions": {
+            "source": {
+                "organizeImports": "on"
+            }
+        }
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "preset": "none"
+        }
+    },
+    "files": {
+        "includes": [
+            "**",
+            "!node_modules/**",
+            "!.venv/**",
+            "!dist/**",
+            "!dist-electron/**",
+            "!midi-cache/**/*.mid",
+            "!midi-cache/.plan-cache/**"
+        ]
+    }
+}
