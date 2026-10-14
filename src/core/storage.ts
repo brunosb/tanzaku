@@ -25,7 +25,7 @@ export function defaultStorageRoot(): string {
         return path.resolve(process.env.WWM_PLAYER_DATA_DIR);
     const appData =
         process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming');
-    return path.join(appData, 'WWM Player');
+    return path.join(appData, 'Tanzaku');
 }
 
 export function createStorageLayout(

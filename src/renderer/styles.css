@@ -8,8 +8,8 @@
     --surface-3: #242c30;
     --muted: #9ba6ab;
     --subtle: #647177;
-    --green: #1ed760;
-    --green-soft: rgba(30, 215, 96, 0.18);
+    --yellow: #f5c451;
+    --yellow-soft: rgba(245, 196, 81, 0.18);
     --line: rgba(255, 255, 255, 0.08);
 }
 
@@ -41,7 +41,7 @@ button {
 button:focus-visible,
 select:focus-visible,
 input:focus-visible {
-    outline: 2px solid var(--green);
+    outline: 2px solid var(--yellow);
     outline-offset: 2px;
 }
 
@@ -86,8 +86,8 @@ input:focus-visible {
     height: 20px;
     place-items: center;
     border-radius: 6px;
-    color: #06100a;
-    background: var(--green);
+    color: #211801;
+    background: var(--yellow);
     font-size: 11px;
     font-weight: 800;
 }
@@ -147,7 +147,7 @@ input:focus-visible {
     place-items: center;
     border-radius: 50%;
     color: #06100a;
-    background: var(--green);
+    background: var(--yellow);
     font-weight: 800;
 }
 
@@ -264,8 +264,8 @@ input:focus-visible {
 }
 
 .song-add:hover {
-    color: var(--green);
-    background: var(--green-soft);
+    color: var(--yellow);
+    background: var(--yellow-soft);
 }
 
 .song:hover,
@@ -275,7 +275,7 @@ input:focus-visible {
 }
 
 .song.active {
-    box-shadow: inset 3px 0 var(--green);
+    box-shadow: inset 3px 0 var(--yellow);
 }
 
 .song-icon {
@@ -285,8 +285,8 @@ input:focus-visible {
     flex: 0 0 30px;
     place-items: center;
     border-radius: 4px;
-    color: var(--green);
-    background: var(--green-soft);
+    color: var(--yellow);
+    background: var(--yellow-soft);
 }
 
 .song-copy {
@@ -320,13 +320,13 @@ input:focus-visible {
 .primary-button {
     padding: 9px 16px;
     border-radius: 6px;
-    color: #06100a;
-    background: var(--green);
+    color: #211801;
+    background: var(--yellow);
     font-weight: 700;
 }
 
 .primary-button:hover {
-    background: #50e681;
+    background: #ffdc72;
 }
 
 .primary-button:disabled {
@@ -347,7 +347,7 @@ input:focus-visible {
     padding: 28px 34px 34px;
     background: radial-gradient(
         circle at 50% 0,
-        #24342d 0,
+        #342f24 0,
         #111719 34%,
         #101416 70%
     );
@@ -515,8 +515,8 @@ h1 {
     bottom: 0;
     z-index: 5;
     width: 2px;
-    background: var(--green);
-    box-shadow: 0 0 12px var(--green);
+    background: var(--yellow);
+    box-shadow: 0 0 12px var(--yellow);
     pointer-events: none;
 }
 
@@ -685,8 +685,8 @@ h1 {
     flex: 0 0 26px;
     place-items: center;
     border-radius: 4px;
-    color: var(--green);
-    background: var(--green-soft);
+    color: var(--yellow);
+    background: var(--yellow-soft);
 }
 
 .playlist-action {
@@ -748,14 +748,14 @@ h1 {
 .transport-button.primary {
     width: 42px;
     height: 42px;
-    color: #06100a;
-    background: var(--green);
+    color: #211801;
+    background: var(--yellow);
     font-size: 17px;
 }
 
 .transport-button.repeat.active {
-    color: var(--green);
-    background: var(--green-soft);
+    color: var(--yellow);
+    background: var(--yellow-soft);
 }
 
 .timeline-control {
@@ -771,7 +771,7 @@ h1 {
 .timeline-control input {
     min-width: 80px;
     flex: 1;
-    accent-color: var(--green);
+    accent-color: var(--yellow);
 }
 
 .speed-control {
@@ -794,7 +794,7 @@ h1 {
 .overlay-shell {
     height: 100%;
     padding: 12px;
-    border: 1px solid rgba(30, 215, 96, 0.35);
+    border: 1px solid rgba(245, 196, 81, 0.35);
     border-radius: 10px;
     color: white;
     background: rgba(13, 17, 19, 0.88);

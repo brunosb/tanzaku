@@ -84,7 +84,7 @@ function renderShell(): void {
     if (overlay) {
         app.innerHTML = `
             <section class="overlay-shell">
-                <div class="overlay-heading"><strong>WWM Player</strong><span id="overlay-state">Pronto</span></div>
+                <div class="overlay-heading"><strong>Tanzaku</strong><span id="overlay-state">Pronto</span></div>
                 ${rollMarkup()}
             </section>`;
         return;
@@ -93,7 +93,7 @@ function renderShell(): void {
     app.innerHTML = `
         <div class="desktop-shell">
             <header class="window-chrome">
-                <div class="window-drag"><span class="window-mark">W</span><span>WWM Player</span></div>
+                <div class="window-drag"><span class="window-mark">T</span><span>Tanzaku</span></div>
                 <div class="window-actions">
                     <button class="window-action" id="window-minimize" title="Minimizar">−</button>
                     <button class="window-action" id="window-maximize" title="Maximizar">□</button>
@@ -102,7 +102,7 @@ function renderShell(): void {
             </header>
         <div class="app-shell">
             <aside class="sidebar">
-                <div class="brand"><span class="brand-mark">W</span><div><strong>WWM Player</strong><small>Music workspace</small></div></div>
+                <div class="brand"><span class="brand-mark">T</span><div><strong>Tanzaku</strong><small>Music workspace</small></div></div>
                 <div class="sidebar-heading"><span>Sua biblioteca</span><div class="sidebar-actions"><button class="icon-button" id="youtube-import" title="Adicionar pelo YouTube">🔗</button><button class="icon-button" id="import" title="Importar MIDI">＋</button></div></div>
                 <div id="library" class="library-list"><div class="empty-state">Carregando biblioteca...</div></div>
                 <div class="sidebar-heading playlist-heading"><span>Playlists</span><button class="icon-button" id="playlist-create" title="Criar playlist">＋</button></div>
