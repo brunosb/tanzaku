@@ -32,7 +32,7 @@ Clone o repositório e instale as dependências:
 
 ```powershell
 git clone <url-do-repositorio>
-cd wwm-player
+cd tanzaku
 npm install
 ```
 
@@ -118,10 +118,10 @@ Por padrão, a biblioteca e as configurações são armazenadas em:
 %APPDATA%\Tanzaku
 ```
 
-É possível definir outro local usando a variável de ambiente `WWM_PLAYER_DATA_DIR`:
+É possível definir outro local usando a variável de ambiente `TANZAKU_DATA_DIR`:
 
 ```powershell
-$env:WWM_PLAYER_DATA_DIR = 'D:\Dados\Tanzaku'
+$env:TANZAKU_DATA_DIR = 'D:\Dados\Tanzaku'
 npm run cli
 ```
 

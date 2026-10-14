@@ -3,7 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 const invoke = (channel: string, ...args: unknown[]) =>
     ipcRenderer.invoke(channel, ...args);
 
-contextBridge.exposeInMainWorld('wwm', {
+contextBridge.exposeInMainWorld('tanzaku', {
     window: {
         minimize: () => invoke('window:minimize'),
         toggleMaximize: () => invoke('window:toggle-maximize'),

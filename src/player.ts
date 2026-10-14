@@ -546,7 +546,7 @@ function renameLibraryEntry(entry: LibraryEntry, title: string) {
 async function searchBitmidi(query: string) {
     const res = await fetch(
         `https://bitmidi.com/search?q=${encodeURIComponent(query)}`,
-        { headers: { 'user-agent': 'Mozilla/5.0 (wwm-player)' } },
+        { headers: { 'user-agent': 'Mozilla/5.0 (Tanzaku)' } },
     );
     if (!res.ok) throw new Error(`BitMidi respondeu ${res.status}`);
     const html = await res.text(),
@@ -568,7 +568,7 @@ async function searchBitmidi(query: string) {
 }
 async function downloadUrl(url: string) {
     const res = await fetch(url, {
-        headers: { 'user-agent': 'Mozilla/5.0 (wwm-player)' },
+        headers: { 'user-agent': 'Mozilla/5.0 (Tanzaku)' },
     });
     if (!res.ok) throw new Error(`Download falhou: ${res.status}`);
     return Buffer.from(await res.arrayBuffer());
@@ -576,7 +576,7 @@ async function downloadUrl(url: string) {
 async function downloadBitmidi(page: string) {
     const html = await (
         await fetch(page, {
-            headers: { 'user-agent': 'Mozilla/5.0 (wwm-player)' },
+            headers: { 'user-agent': 'Mozilla/5.0 (Tanzaku)' },
         })
     ).text();
     const m =
@@ -701,7 +701,7 @@ async function transcribeYoutube(
         throw new Error(
             `Script de transcrição não encontrado: ${YOUTUBE_TRANSCRIBER}`,
         );
-    const temporary = await mkdtemp(path.join(os.tmpdir(), 'wwm-player-'));
+    const temporary = await mkdtemp(path.join(os.tmpdir(), 'tanzaku-'));
     try {
         let title = 'musica do YouTube';
         try {

@@ -1,4 +1,4 @@
-# Plano de atualização do WWM Player
+# Plano de evolução do Tanzaku
 
 Estas especificações descrevem a evolução do CLI para uma aplicação Windows com Electron mínimo, mantendo o núcleo de reprodução independente da interface.
 

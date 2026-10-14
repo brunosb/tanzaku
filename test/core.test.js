@@ -15,7 +15,7 @@ const {
 } = require('../dist/core/storage.js');
 
 test('storage cria layout e rejeita caminho fora da biblioteca', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wwm-player-'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tanzaku-'));
     const layout = createStorageLayout(root);
     ensureStorage(layout);
     assert.ok(fs.existsSync(layout.midi));
@@ -119,7 +119,7 @@ test('renderer representa os três blocos WWM e usa tempo absoluto em pixels', (
 });
 
 test('biblioteca renomeia e exclui o MIDI junto com o registro', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wwm-library-'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tanzaku-library-'));
     const layout = createStorageLayout(root);
     ensureStorage(layout);
     fs.writeFileSync(
@@ -141,7 +141,7 @@ test('biblioteca renomeia e exclui o MIDI junto com o registro', () => {
 });
 
 test('playlist persiste, evita músicas duplicadas e permite remover', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wwm-playlist-'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tanzaku-playlist-'));
     const layout = createStorageLayout(root);
     ensureStorage(layout);
     const service = new PlaylistService(layout);
