@@ -1,5 +1,5 @@
 {
-    "name": "wwm-player",
+    "name": "tanzaku",
     "version": "1.0.0",
     "description": "Toca MIDI no modo de música livre de Where Winds Meet (36 teclas)",
     "main": "dist-electron/electron/main.js",
@@ -30,8 +30,8 @@
         "node": ">=18"
     },
     "build": {
-        "appId": "com.wwmplayer.desktop",
-        "productName": "WWM Player",
+        "appId": "com.tanzaku.desktop",
+        "productName": "Tanzaku",
         "asar": true,
         "files": [
             "dist-electron/**/*",

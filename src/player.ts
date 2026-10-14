@@ -1286,7 +1286,7 @@ async function menu(kb: Keyboard) {
     while (true) {
         const library = loadLibrary(false);
         console.log(
-            '\n=== WWM Player ===\n1) Tocar música salva\n2) Buscar e baixar\n3) Abrir MIDI local ou URL\n4) Escala de teste\n5) Configurações\n6) Gerenciar biblioteca\n7) Sair',
+            '\n=== Tanzaku ===\n1) Tocar música salva\n2) Buscar e baixar\n3) Abrir MIDI local ou URL\n4) Escala de teste\n5) Configurações\n6) Gerenciar biblioteca\n7) Sair',
         );
         const choice = (await ask('Digite uma opção (1-7) e pressione Enter: '))
             .replace(/\s/g, '')
