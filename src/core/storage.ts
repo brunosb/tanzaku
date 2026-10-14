@@ -21,8 +21,8 @@ export type MigrationReport = {
 };
 
 export function defaultStorageRoot(): string {
-    if (process.env.WWM_PLAYER_DATA_DIR)
-        return path.resolve(process.env.WWM_PLAYER_DATA_DIR);
+    if (process.env.TANZAKU_DATA_DIR)
+        return path.resolve(process.env.TANZAKU_DATA_DIR);
     const appData =
         process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming');
     return path.join(appData, 'Tanzaku');

@@ -1,5 +1,5 @@
 interface Window {
-    wwm: any;
+    tanzaku: any;
 }
 
 type PlaybackState = {
@@ -269,7 +269,7 @@ async function addTrackToPlaylist(trackId: string): Promise<void> {
         return;
     }
     try {
-        const playlist = await window.wwm.playlists.add(
+        const playlist = await window.tanzaku.playlists.add(
             selectedPlaylistId,
             trackId,
         );
@@ -289,14 +289,14 @@ async function handlePlaylistAction(
     try {
         if (action === 'delete') {
             if (!window.confirm('Excluir esta playlist?')) return;
-            await window.wwm.playlists.remove(playlistId);
+            await window.tanzaku.playlists.remove(playlistId);
             if (selectedPlaylistId === playlistId) selectedPlaylistId = '';
-            renderPlaylists(await window.wwm.playlists.list());
+            renderPlaylists(await window.tanzaku.playlists.list());
             return;
         }
         selectedPlaylistId = playlistId;
         renderPlaylists(playlists);
-        await window.wwm.playlists.play(
+        await window.tanzaku.playlists.play(
             playlistId,
             action === 'shuffle' ? 'shuffle' : 'order',
         );
@@ -358,12 +358,12 @@ async function submitInputModal(): Promise<void> {
     submit.disabled = true;
     try {
         if (inputModalMode === 'playlist') {
-            const playlist = await window.wwm.playlists.create(value);
+            const playlist = await window.tanzaku.playlists.create(value);
             selectedPlaylistId = playlist.id;
-            renderPlaylists(await window.wwm.playlists.list());
+            renderPlaylists(await window.tanzaku.playlists.list());
         } else {
-            const entry = await window.wwm.library.addYoutube(value);
-            renderLibrary(await window.wwm.library.list());
+            const entry = await window.tanzaku.library.addYoutube(value);
+            renderLibrary(await window.tanzaku.library.list());
             if (progress) progress.textContent = `Salvo: ${entry.title}`;
         }
         closeInputModal();
@@ -377,7 +377,7 @@ async function submitInputModal(): Promise<void> {
 async function openSong(id: string): Promise<void> {
     if (!id) return;
     try {
-        const plan = await window.wwm.playback.load(id);
+        const plan = await window.tanzaku.playback.load(id);
         selectedId = id;
         const button = document.querySelector<HTMLButtonElement>(
             `.song[data-id="${CSS.escape(id)}"]`,
@@ -508,27 +508,33 @@ function requestRender(): void {
 function bindControls(): void {
     document
         .querySelector('#window-minimize')
-        ?.addEventListener('click', () => void window.wwm.window.minimize());
+        ?.addEventListener(
+            'click',
+            () => void window.tanzaku.window.minimize(),
+        );
     document
         .querySelector('#window-maximize')
         ?.addEventListener(
             'click',
-            () => void window.wwm.window.toggleMaximize(),
+            () => void window.tanzaku.window.toggleMaximize(),
         );
     document
         .querySelector('#window-close')
-        ?.addEventListener('click', () => void window.wwm.window.close());
+        ?.addEventListener('click', () => void window.tanzaku.window.close());
     document.querySelector('#play-toggle')?.addEventListener('click', () => {
-        if (currentState.status === 'playing') void window.wwm.playback.pause();
-        else void window.wwm.playback.play();
+        if (currentState.status === 'playing')
+            void window.tanzaku.playback.pause();
+        else void window.tanzaku.playback.play();
     });
     document
         .querySelector('#stop')
-        ?.addEventListener('click', () => void window.wwm.playback.stop());
+        ?.addEventListener('click', () => void window.tanzaku.playback.stop());
     document
         .querySelector('#repeat-toggle')
         ?.addEventListener('click', async () => {
-            repeatEnabled = Boolean(await window.wwm.playback.toggleRepeat());
+            repeatEnabled = Boolean(
+                await window.tanzaku.playback.toggleRepeat(),
+            );
             requestRender();
         });
     document
@@ -552,8 +558,8 @@ function bindControls(): void {
         });
     document.querySelector('#import')?.addEventListener('click', async () => {
         try {
-            const entry = await window.wwm.library.import();
-            if (entry) renderLibrary(await window.wwm.library.list());
+            const entry = await window.tanzaku.library.import();
+            if (entry) renderLibrary(await window.tanzaku.library.list());
         } catch (error) {
             showError(error);
         }
@@ -562,7 +568,7 @@ function bindControls(): void {
         seeking = true;
         seekPreview = currentState.position;
         resumeAfterSeek = currentState.status === 'playing';
-        if (resumeAfterSeek) void window.wwm.playback.pause();
+        if (resumeAfterSeek) void window.tanzaku.playback.pause();
     });
     document.querySelector('#seek')?.addEventListener('input', (event) => {
         seekPreview = Number((event.target as HTMLInputElement).value);
@@ -573,8 +579,8 @@ function bindControls(): void {
         seeking = false;
         seekPreview = null;
         resumeAfterSeek = false;
-        void window.wwm.playback.seek(value).then(() => {
-            if (shouldResume) void window.wwm.playback.play();
+        void window.tanzaku.playback.seek(value).then(() => {
+            if (shouldResume) void window.tanzaku.playback.play();
         });
     };
     document.querySelector('#seek')?.addEventListener('change', (event) => {
@@ -590,23 +596,23 @@ function bindControls(): void {
         ?.addEventListener(
             'change',
             (event) =>
-                void window.wwm.playback.setSpeed(
+                void window.tanzaku.playback.setSpeed(
                     Number((event.target as HTMLSelectElement).value),
                 ),
         );
     document
         .querySelector('#overlay-button')
-        ?.addEventListener('click', () => void window.wwm.overlay.show());
+        ?.addEventListener('click', () => void window.tanzaku.overlay.show());
     document.querySelector('#folder')?.addEventListener('click', async () => {
         try {
-            const directory = await window.wwm.storage.chooseDirectory();
+            const directory = await window.tanzaku.storage.chooseDirectory();
             if (directory) {
                 const target = document.querySelector('#folder-name');
                 if (target) target.textContent = directory;
                 selectedId = '';
                 selectedTitle = 'Selecione uma música';
-                renderLibrary(await window.wwm.library.list());
-                renderPlaylists(await window.wwm.playlists.list());
+                renderLibrary(await window.tanzaku.library.list());
+                renderPlaylists(await window.tanzaku.playlists.list());
                 const title = document.querySelector('#selected');
                 if (title) title.textContent = selectedTitle;
             }
@@ -619,9 +625,9 @@ function bindControls(): void {
 renderShell();
 if (!overlay) {
     bindControls();
-    void window.wwm.library.list().then(renderLibrary).catch(showError);
-    void window.wwm.playlists.list().then(renderPlaylists).catch(showError);
-    void window.wwm.settings
+    void window.tanzaku.library.list().then(renderLibrary).catch(showError);
+    void window.tanzaku.playlists.list().then(renderPlaylists).catch(showError);
+    void window.tanzaku.settings
         .get()
         .then((settings: { storageRoot?: string }) => {
             const target = document.querySelector('#folder-name');
@@ -631,7 +637,7 @@ if (!overlay) {
         })
         .catch(showError);
 }
-window.wwm?.onTrack((track: { id?: string; title?: string }) => {
+window.tanzaku?.onTrack((track: { id?: string; title?: string }) => {
     if (!track?.id) return;
     selectedId = track.id;
     selectedTitle = track.title ?? track.id;
@@ -646,23 +652,25 @@ window.wwm?.onTrack((track: { id?: string; title?: string }) => {
             ),
         );
 });
-window.wwm?.playback.onState((state: PlaybackState) => {
+window.tanzaku?.playback.onState((state: PlaybackState) => {
     currentState = state;
     if (state.status === 'playing') countdownRemaining = null;
     requestRender();
 });
-window.wwm?.playback.onPlan((plan: PlaybackPlan) => renderPlan(plan));
-window.wwm?.playback.onCountdown((value: { remaining?: number }) => {
+window.tanzaku?.playback.onPlan((plan: PlaybackPlan) => renderPlan(plan));
+window.tanzaku?.playback.onCountdown((value: { remaining?: number }) => {
     const remaining = Number(value?.remaining);
     countdownRemaining = remaining > 0 ? remaining : null;
     requestRender();
 });
-window.wwm?.onYoutubeProgress((value: { stage?: string; percent?: number }) => {
-    const percent = Number(value?.percent);
-    youtubeProgress = value?.stage
-        ? `${value.stage}${Number.isFinite(percent) && percent > 0 ? ` ${percent.toFixed(0)}%` : ''}`
-        : null;
-    const progress = document.querySelector('#input-modal-progress');
-    if (progress) progress.textContent = youtubeProgress ?? '';
-    requestRender();
-});
+window.tanzaku?.onYoutubeProgress(
+    (value: { stage?: string; percent?: number }) => {
+        const percent = Number(value?.percent);
+        youtubeProgress = value?.stage
+            ? `${value.stage}${Number.isFinite(percent) && percent > 0 ? ` ${percent.toFixed(0)}%` : ''}`
+            : null;
+        const progress = document.querySelector('#input-modal-progress');
+        if (progress) progress.textContent = youtubeProgress ?? '';
+        requestRender();
+    },
+);

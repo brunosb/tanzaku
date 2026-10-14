@@ -139,7 +139,7 @@ export async function transcribeYoutube(
     const script = path.join(projectRoot(), 'tools', 'youtube_to_midi.py');
     if (!fs.existsSync(script))
         throw new Error(`Script de transcrição não encontrado: ${script}`);
-    const temporary = await mkdtemp(path.join(os.tmpdir(), 'wwm-player-'));
+    const temporary = await mkdtemp(path.join(os.tmpdir(), 'tanzaku-'));
     try {
         onProgress?.({ stage: 'Obtendo informações do vídeo', percent: 0 });
         let title = 'Música do YouTube';
