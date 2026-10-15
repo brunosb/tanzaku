@@ -37,7 +37,7 @@ window.tanzaku = {
         close: () => currentWindow.close(),
     },
     library: {
-        list: () => Promise.resolve([]),
+        list: () => tauri.core.invoke('library_list'),
         open: (id: string) => unsupported(`Abrir música ${id}`),
         rename: (id: string, title: string) =>
             unsupported(`Renomear música ${id} para ${title}`),
@@ -60,7 +60,7 @@ window.tanzaku = {
         onCountdown: emptyUnsubscribe,
     },
     playlists: {
-        list: () => Promise.resolve([]),
+        list: () => tauri.core.invoke('playlist_list'),
         create: (name: string) => unsupported(`Criar playlist ${name}`),
         rename: (id: string, name: string) =>
             unsupported(`Renomear playlist ${id} para ${name}`),
@@ -75,7 +75,7 @@ window.tanzaku = {
     onTrack: emptyUnsubscribe,
     onYoutubeProgress: emptyUnsubscribe,
     settings: {
-        get: () => Promise.resolve({ storageRoot: '' }),
+        get: () => tauri.core.invoke('settings_get'),
         update: (settings: unknown) => Promise.resolve(settings),
     },
     overlay: {
