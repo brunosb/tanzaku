@@ -32,6 +32,8 @@
             "!.venv/**",
             "!dist/**",
             "!dist-electron/**",
+            "!src-tauri/target/**",
+            "!src-tauri/gen/**",
             "!midi-cache/**/*.mid",
             "!midi-cache/.plan-cache/**"
         ]

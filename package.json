@@ -11,6 +11,8 @@
         "dev:electron": "nodemon --watch src --ext ts,html,css --exec \"npm run build:electron && npm run start:electron\"",
         "build": "tsc",
         "build:electron": "tsc -p tsconfig.electron.json",
+        "tauri:check": "cargo check --manifest-path src-tauri/Cargo.toml",
+        "tauri:run": "cargo run --manifest-path src-tauri/Cargo.toml",
         "format": "biome format --write .",
         "format:check": "biome check .",
         "lint": "biome lint .",

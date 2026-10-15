@@ -110,6 +110,20 @@ Esse comando compila a aplicação Electron e executa o `electron-builder`. O in
 
 O pacote de produção inclui o runtime compilado, a interface renderer, o script de transcrição e as dependências necessárias. O ambiente `.venv`, arquivos MIDI de desenvolvimento e dados pessoais da biblioteca não são incluídos no instalador.
 
+## Experimento Tauri/Rust
+
+A branch `experiment/tauri-onnx` contém um shell experimental separado do Electron.
+Ela exige Rust via `rustup` e usa a versão fixada em `rust-toolchain.toml`.
+
+```powershell
+npm run tauri:check
+npm run tauri:run
+```
+
+O shell inicial valida a janela Tauri e a comunicação entre a interface e o backend Rust.
+O Electron continua sendo a implementação de referência enquanto a migração e a comparação
+com ONNX são desenvolvidas.
+
 ## Dados da aplicação
 
 Por padrão, a biblioteca e as configurações são armazenadas em:
