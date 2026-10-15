@@ -30,6 +30,174 @@ const unsupported = (operation: string) =>
 
 const emptyUnsubscribe = () => () => undefined
 
+type PlaybackPlan = {
+    duration: number
+    events: Array<{ time: number; hold: number; keys: unknown[] }>
+    stats?: Record<string, number>
+}
+
+type PlaybackState = {
+    status: 'idle' | 'playing' | 'paused' | 'stopped' | 'ended'
+    position: number
+    duration: number
+    speed: number
+    currentEventIndex: number
+}
+
+const playbackState: PlaybackState = {
+    status: 'idle',
+    position: 0,
+    duration: 0,
+    speed: 1,
+    currentEventIndex: 0,
+}
+let playbackPlan: PlaybackPlan = { events: [], duration: 0 }
+let playbackStartedAt = 0
+let playbackGeneration = 0
+let playbackEventTimer: ReturnType<typeof setTimeout> | undefined
+let playbackTickTimer: ReturnType<typeof setTimeout> | undefined
+const stateListeners = new Set<(state: PlaybackState) => void>()
+const eventListeners = new Set<(event: unknown, index: number) => void>()
+
+const emitPlaybackState = () => {
+    const snapshot = { ...playbackState }
+    for (const listener of stateListeners) listener(snapshot)
+}
+
+const clearPlaybackTimers = () => {
+    if (playbackEventTimer) clearTimeout(playbackEventTimer)
+    if (playbackTickTimer) clearTimeout(playbackTickTimer)
+    playbackEventTimer = undefined
+    playbackTickTimer = undefined
+}
+
+const playbackPosition = () => {
+    if (playbackState.status !== 'playing') return playbackState.position
+    const elapsed =
+        ((performance.now() - playbackStartedAt) / 1000) * playbackState.speed
+    return Math.max(0, Math.min(playbackState.duration, elapsed))
+}
+
+const finishPlayback = () => {
+    clearPlaybackTimers()
+    playbackState.position = playbackState.duration
+    playbackState.status = 'ended'
+    emitPlaybackState()
+}
+
+const schedulePlayback = (generation: number) => {
+    if (generation !== playbackGeneration || playbackState.status !== 'playing')
+        return
+    const position = playbackPosition()
+    while (
+        playbackState.currentEventIndex < playbackPlan.events.length &&
+        playbackPlan.events[playbackState.currentEventIndex].time <=
+            position + 0.000001
+    ) {
+        const index = playbackState.currentEventIndex++
+        const event = playbackPlan.events[index]
+        for (const listener of eventListeners) listener(event, index)
+    }
+    const next = playbackPlan.events[playbackState.currentEventIndex]
+    if (next)
+        playbackEventTimer = setTimeout(
+            () => schedulePlayback(generation),
+            Math.max(1, ((next.time - position) / playbackState.speed) * 1000),
+        )
+}
+
+const schedulePlaybackTick = (generation: number) => {
+    if (generation !== playbackGeneration || playbackState.status !== 'playing')
+        return
+    playbackState.position = playbackPosition()
+    if (playbackState.position >= playbackState.duration) {
+        finishPlayback()
+        return
+    }
+    emitPlaybackState()
+    playbackTickTimer = setTimeout(() => schedulePlaybackTick(generation), 33)
+}
+
+const loadPlaybackPlan = (plan: PlaybackPlan) => {
+    clearPlaybackTimers()
+    playbackGeneration++
+    playbackPlan = plan
+    playbackState.status = 'idle'
+    playbackState.position = 0
+    playbackState.duration = plan.duration
+    playbackState.currentEventIndex = 0
+    emitPlaybackState()
+}
+
+const startPlayback = () => {
+    if (!playbackPlan.events.length || playbackState.status === 'playing')
+        return
+    if (
+        playbackState.status === 'ended' ||
+        playbackState.status === 'stopped'
+    ) {
+        playbackState.position = 0
+        playbackState.currentEventIndex = 0
+    }
+    playbackState.status = 'playing'
+    playbackStartedAt =
+        performance.now() -
+        (playbackState.position / playbackState.speed) * 1000
+    const generation = ++playbackGeneration
+    emitPlaybackState()
+    schedulePlayback(generation)
+    schedulePlaybackTick(generation)
+}
+
+const pausePlayback = () => {
+    if (playbackState.status !== 'playing') return
+    playbackState.position = playbackPosition()
+    playbackState.status = 'paused'
+    clearPlaybackTimers()
+    playbackGeneration++
+    emitPlaybackState()
+}
+
+const stopPlayback = () => {
+    clearPlaybackTimers()
+    playbackGeneration++
+    playbackState.status = 'stopped'
+    playbackState.position = 0
+    playbackState.currentEventIndex = 0
+    emitPlaybackState()
+}
+
+const seekPlayback = (position: number) => {
+    clearPlaybackTimers()
+    playbackGeneration++
+    playbackState.position = Math.max(
+        0,
+        Math.min(playbackState.duration, Number(position) || 0),
+    )
+    playbackState.currentEventIndex = playbackPlan.events.findIndex(
+        (event) => event.time >= playbackState.position,
+    )
+    if (playbackState.currentEventIndex < 0)
+        playbackState.currentEventIndex = playbackPlan.events.length
+    playbackState.status = 'paused'
+    emitPlaybackState()
+}
+
+const setPlaybackSpeed = (speed: number) => {
+    const next = Math.max(0.1, Math.min(4, Number(speed) || 1))
+    if (playbackState.status === 'playing') {
+        playbackState.position = playbackPosition()
+        playbackStartedAt =
+            performance.now() - (playbackState.position / next) * 1000
+        clearPlaybackTimers()
+        const generation = ++playbackGeneration
+        schedulePlayback(generation)
+        schedulePlaybackTick(generation)
+    }
+    playbackState.speed = next
+    emitPlaybackState()
+}
+
 window.tanzaku = {
     window: {
         minimize: () => currentWindow.minimize(),
@@ -46,16 +214,29 @@ window.tanzaku = {
         addYoutube: (url: string) => unsupported(`Importar YouTube ${url}`),
     },
     playback: {
-        load: (id: string) => tauri.core.invoke('playback_load', { id }),
-        play: () => unsupported('Reproduzir'),
-        pause: () => unsupported('Pausar'),
-        stop: () => unsupported('Parar'),
-        seek: (position: number) => unsupported(`Navegar para ${position}`),
-        setSpeed: (speed: number) =>
-            unsupported(`Alterar velocidade para ${speed}`),
+        load: async (id: string) => {
+            const plan = await tauri.core.invoke<PlaybackPlan>(
+                'playback_load',
+                { id },
+            )
+            loadPlaybackPlan(plan)
+            return plan
+        },
+        play: async () => startPlayback(),
+        pause: async () => pausePlayback(),
+        stop: async () => stopPlayback(),
+        seek: async (position: number) => seekPlayback(position),
+        setSpeed: async (speed: number) => setPlaybackSpeed(speed),
         toggleRepeat: () => Promise.resolve(false),
-        onState: emptyUnsubscribe,
-        onEvent: emptyUnsubscribe,
+        onState: (listener: (state: PlaybackState) => void) => {
+            stateListeners.add(listener)
+            listener({ ...playbackState })
+            return () => stateListeners.delete(listener)
+        },
+        onEvent: (listener: (event: unknown, index: number) => void) => {
+            eventListeners.add(listener)
+            return () => eventListeners.delete(listener)
+        },
         onPlan: emptyUnsubscribe,
         onCountdown: emptyUnsubscribe,
     },
