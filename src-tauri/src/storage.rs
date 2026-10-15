@@ -194,6 +194,34 @@ pub fn import_midi(source: &Path) -> Result<LibraryEntry, String> {
     Ok(entry)
 }
 
+pub fn save_transcribed_midi(
+    source: &Path,
+    title: &str,
+    source_url: &str,
+) -> Result<LibraryEntry, String> {
+    ensure_storage().map_err(|error| error.to_string())?;
+    let safe_title = safe_file_name(title)?;
+    let mut file_name = format!("{safe_title}.mid");
+    let mut count = 2;
+    while midi_path(&file_name)?.exists() {
+        file_name = format!("{safe_title} ({count}).mid");
+        count += 1;
+    }
+    fs::copy(source, midi_path(&file_name)?).map_err(|error| error.to_string())?;
+    let entry = LibraryEntry {
+        id: file_name.clone(),
+        title: title.trim().to_string(),
+        file: file_name,
+        source_url: Some(source_url.to_string()),
+        duration: None,
+        added_at: None,
+    };
+    let mut entries = read_library();
+    entries.push(entry.clone());
+    write_library(&entries)?;
+    Ok(entry)
+}
+
 pub fn rename_midi(id: &str, title: &str) -> Result<LibraryEntry, String> {
     let mut entries = read_library();
     let entry = entries

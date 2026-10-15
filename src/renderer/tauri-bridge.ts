@@ -9,6 +9,9 @@ type TauriGlobal = {
             close(): Promise<void>
         }
     }
+    event: {
+        listen<T>(event: string, handler: (event: { payload: T }) => void): Promise<() => void>
+    }
 }
 
 export {}
@@ -258,7 +261,8 @@ window.tanzaku = {
             tauri.core.invoke('library_rename', { id, title }),
         remove: (id: string) => tauri.core.invoke('library_delete', { id }),
         import: () => tauri.core.invoke('library_import'),
-        addYoutube: (url: string) => unsupported(`Importar YouTube ${url}`),
+        addYoutube: (url: string) =>
+            tauri.core.invoke('library_add_youtube', { url }),
     },
     playback: {
         load: async (id: string) => {
@@ -311,7 +315,18 @@ window.tanzaku = {
             unsupported(`Reproduzir playlist ${id} em ${mode}`),
     },
     onTrack: emptyUnsubscribe,
-    onYoutubeProgress: emptyUnsubscribe,
+    onYoutubeProgress: (listener: (value: { stage?: string; percent?: number }) => void) => {
+        let unlisten: (() => void) | undefined
+        void tauri.event
+            .listen<{ stage?: string; percent?: number }>(
+                'youtube-progress',
+                (event) => listener(event.payload),
+            )
+            .then((cleanup) => {
+                unlisten = cleanup
+            })
+        return () => unlisten?.()
+    },
     settings: {
         get: () => storageReady.then(() => tauri.core.invoke('settings_get')),
         update: (settings: unknown) => Promise.resolve(settings),

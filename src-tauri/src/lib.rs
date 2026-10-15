@@ -5,6 +5,7 @@ mod midi;
 mod planner;
 mod storage;
 mod transcription;
+mod youtube;
 
 fn new_playlist_id() -> String {
     let value = std::time::SystemTime::now()
@@ -261,11 +262,20 @@ fn transcription_wav_to_midi(
     )
 }
 
+#[tauri::command]
+fn library_add_youtube(
+    app: tauri::AppHandle,
+    url: String,
+) -> Result<storage::LibraryEntry, String> {
+    youtube::add_youtube(&app, url.trim())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             library_delete,
+            library_add_youtube,
             library_import,
             library_list,
             library_rename,
