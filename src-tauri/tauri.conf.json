@@ -12,7 +12,7 @@
                 "label": "main",
                 "title": "Tanzaku Tauri Experiment",
                 "width": 900,
-                "height": 600,
+                "height": 810,
                 "resizable": true,
                 "decorations": false
             }
