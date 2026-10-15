@@ -179,6 +179,19 @@ fn storage_choose_directory() -> Result<Option<String>, String> {
     let Some(root) = rfd::FileDialog::new().pick_folder() else {
         return Ok(None);
     };
+    storage_set_directory_path(root)
+}
+
+#[tauri::command]
+fn storage_set_directory(path: String) -> Result<Option<String>, String> {
+    let root = std::path::PathBuf::from(path.trim());
+    if root.as_os_str().is_empty() {
+        return Ok(None);
+    }
+    storage_set_directory_path(root)
+}
+
+fn storage_set_directory_path(root: std::path::PathBuf) -> Result<Option<String>, String> {
     std::fs::create_dir_all(root.join("midi")).map_err(|error| error.to_string())?;
     std::fs::create_dir_all(root.join("plans")).map_err(|error| error.to_string())?;
     let settings = storage::read_settings();
@@ -227,7 +240,8 @@ pub fn run() {
             playback_load,
             runtime_info,
             settings_get,
-            storage_choose_directory
+            storage_choose_directory,
+            storage_set_directory
         ])
         .run(tauri::generate_context!())
         .expect("error while running Tanzaku Tauri application");

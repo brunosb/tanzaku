@@ -307,7 +307,10 @@ window.tanzaku = {
         setBounds: () => Promise.resolve(),
     },
     storage: {
-        chooseDirectory: () => tauri.core.invoke('storage_choose_directory'),
+        chooseDirectory: (path?: string) =>
+            path
+                ? tauri.core.invoke('storage_set_directory', { path })
+                : tauri.core.invoke('storage_choose_directory'),
     },
 }
 

@@ -790,7 +790,16 @@ function bindControls(): void {
         ?.addEventListener('click', () => void window.tanzaku.overlay.show())
     document.querySelector('#folder')?.addEventListener('click', async () => {
         try {
-            const directory = await window.tanzaku.storage.chooseDirectory()
+            const current =
+                document.querySelector('#folder-name')?.textContent ?? ''
+            const selected = window.prompt(
+                'Informe a pasta de armazenamento do Tanzaku. Ela deve conter a pasta midi.',
+                current === 'Padrão do usuário' ? '' : current,
+            )
+            if (selected === null) return
+            const directory = await window.tanzaku.storage.chooseDirectory(
+                selected.trim(),
+            )
             if (directory) {
                 const target = document.querySelector('#folder-name')
                 if (target) target.textContent = directory
