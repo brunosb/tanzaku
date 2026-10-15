@@ -176,7 +176,10 @@ fn playlist_remove_track(
 
 #[tauri::command]
 fn storage_choose_directory() -> Result<Option<String>, String> {
-    let Some(root) = rfd::FileDialog::new().pick_folder() else {
+    let Some(root) = rfd::FileDialog::new()
+        .set_title("Escolha a pasta de armazenamento do Tanzaku")
+        .pick_folder()
+    else {
         return Ok(None);
     };
     storage_set_directory_path(root)
