@@ -27,6 +27,21 @@ if (!tauri) throw new Error('API Tauri não disponível.')
 const currentWindow = tauri.window.getCurrentWindow()
 const unsupported = (operation: string) =>
     Promise.reject(new Error(`${operation} ainda não foi migrado para Tauri.`))
+const storedStorageRoot = localStorage.getItem('tanzaku.storageRoot')
+let storageReady: Promise<unknown> = storedStorageRoot
+    ? tauri.core.invoke('storage_set_directory', { path: storedStorageRoot })
+    : Promise.resolve()
+
+const chooseStorageDirectory = async (path?: string) => {
+    const directory = path
+        ? await tauri.core.invoke<string>('storage_set_directory', { path })
+        : await tauri.core.invoke<string | null>('storage_choose_directory')
+    if (directory) {
+        localStorage.setItem('tanzaku.storageRoot', directory)
+        storageReady = Promise.resolve(directory)
+    }
+    return directory
+}
 
 const emptyUnsubscribe = () => () => undefined
 
@@ -237,7 +252,7 @@ window.tanzaku = {
         close: () => currentWindow.close(),
     },
     library: {
-        list: () => tauri.core.invoke('library_list'),
+        list: () => storageReady.then(() => tauri.core.invoke('library_list')),
         open: (id: string) => unsupported(`Abrir música ${id}`),
         rename: (id: string, title: string) =>
             tauri.core.invoke('library_rename', { id, title }),
@@ -276,7 +291,7 @@ window.tanzaku = {
         },
     },
     playlists: {
-        list: () => tauri.core.invoke('playlist_list'),
+        list: () => storageReady.then(() => tauri.core.invoke('playlist_list')),
         create: (name: string) =>
             tauri.core.invoke('playlist_create', { name }),
         rename: (id: string, name: string) =>
@@ -298,7 +313,7 @@ window.tanzaku = {
     onTrack: emptyUnsubscribe,
     onYoutubeProgress: emptyUnsubscribe,
     settings: {
-        get: () => tauri.core.invoke('settings_get'),
+        get: () => storageReady.then(() => tauri.core.invoke('settings_get')),
         update: (settings: unknown) => Promise.resolve(settings),
     },
     overlay: {
@@ -307,10 +322,7 @@ window.tanzaku = {
         setBounds: () => Promise.resolve(),
     },
     storage: {
-        chooseDirectory: (path?: string) =>
-            path
-                ? tauri.core.invoke('storage_set_directory', { path })
-                : tauri.core.invoke('storage_choose_directory'),
+        chooseDirectory: chooseStorageDirectory,
     },
 }
 
