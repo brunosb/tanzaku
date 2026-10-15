@@ -40,9 +40,9 @@ window.tanzaku = {
         list: () => tauri.core.invoke('library_list'),
         open: (id: string) => unsupported(`Abrir música ${id}`),
         rename: (id: string, title: string) =>
-            unsupported(`Renomear música ${id} para ${title}`),
-        remove: (id: string) => unsupported(`Excluir música ${id}`),
-        import: () => unsupported('Importar MIDI'),
+            tauri.core.invoke('library_rename', { id, title }),
+        remove: (id: string) => tauri.core.invoke('library_delete', { id }),
+        import: () => tauri.core.invoke('library_import'),
         addYoutube: (url: string) => unsupported(`Importar YouTube ${url}`),
     },
     playback: {
@@ -61,14 +61,21 @@ window.tanzaku = {
     },
     playlists: {
         list: () => tauri.core.invoke('playlist_list'),
-        create: (name: string) => unsupported(`Criar playlist ${name}`),
+        create: (name: string) =>
+            tauri.core.invoke('playlist_create', { name }),
         rename: (id: string, name: string) =>
-            unsupported(`Renomear playlist ${id} para ${name}`),
-        remove: (id: string) => unsupported(`Excluir playlist ${id}`),
+            tauri.core.invoke('playlist_rename', { id, name }),
+        remove: (id: string) => tauri.core.invoke('playlist_delete', { id }),
         add: (playlistId: string, trackId: string) =>
-            unsupported(`Adicionar ${trackId} à playlist ${playlistId}`),
+            tauri.core.invoke('playlist_add', {
+                playlist_id: playlistId,
+                track_id: trackId,
+            }),
         removeTrack: (playlistId: string, trackId: string) =>
-            unsupported(`Remover ${trackId} da playlist ${playlistId}`),
+            tauri.core.invoke('playlist_remove_track', {
+                playlist_id: playlistId,
+                track_id: trackId,
+            }),
         play: (id: string, mode: 'order' | 'shuffle') =>
             unsupported(`Reproduzir playlist ${id} em ${mode}`),
     },
@@ -84,7 +91,7 @@ window.tanzaku = {
         setBounds: () => Promise.resolve(),
     },
     storage: {
-        chooseDirectory: () => unsupported('Escolher diretório'),
+        chooseDirectory: () => tauri.core.invoke('storage_choose_directory'),
     },
 }
 
