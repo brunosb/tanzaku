@@ -1,7 +1,7 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron'
 
 const invoke = (channel: string, ...args: unknown[]) =>
-    ipcRenderer.invoke(channel, ...args);
+    ipcRenderer.invoke(channel, ...args)
 
 contextBridge.exposeInMainWorld('tanzaku', {
     window: {
@@ -30,34 +30,34 @@ contextBridge.exposeInMainWorld('tanzaku', {
             const callback = (
                 _event: Electron.IpcRendererEvent,
                 state: unknown,
-            ) => listener(state);
-            ipcRenderer.on('playback:state', callback);
-            return () => ipcRenderer.removeListener('playback:state', callback);
+            ) => listener(state)
+            ipcRenderer.on('playback:state', callback)
+            return () => ipcRenderer.removeListener('playback:state', callback)
         },
         onEvent: (listener: (event: unknown) => void) => {
             const callback = (
                 _event: Electron.IpcRendererEvent,
                 event: unknown,
-            ) => listener(event);
-            ipcRenderer.on('playback:event', callback);
-            return () => ipcRenderer.removeListener('playback:event', callback);
+            ) => listener(event)
+            ipcRenderer.on('playback:event', callback)
+            return () => ipcRenderer.removeListener('playback:event', callback)
         },
         onPlan: (listener: (plan: unknown) => void) => {
             const callback = (
                 _event: Electron.IpcRendererEvent,
                 plan: unknown,
-            ) => listener(plan);
-            ipcRenderer.on('playback:plan', callback);
-            return () => ipcRenderer.removeListener('playback:plan', callback);
+            ) => listener(plan)
+            ipcRenderer.on('playback:plan', callback)
+            return () => ipcRenderer.removeListener('playback:plan', callback)
         },
         onCountdown: (listener: (countdown: unknown) => void) => {
             const callback = (
                 _event: Electron.IpcRendererEvent,
                 countdown: unknown,
-            ) => listener(countdown);
-            ipcRenderer.on('playback:countdown', callback);
+            ) => listener(countdown)
+            ipcRenderer.on('playback:countdown', callback)
             return () =>
-                ipcRenderer.removeListener('playback:countdown', callback);
+                ipcRenderer.removeListener('playback:countdown', callback)
         },
     },
     playlists: {
@@ -75,17 +75,17 @@ contextBridge.exposeInMainWorld('tanzaku', {
     },
     onTrack: (listener: (track: unknown) => void) => {
         const callback = (_event: Electron.IpcRendererEvent, track: unknown) =>
-            listener(track);
-        ipcRenderer.on('playback:track', callback);
-        return () => ipcRenderer.removeListener('playback:track', callback);
+            listener(track)
+        ipcRenderer.on('playback:track', callback)
+        return () => ipcRenderer.removeListener('playback:track', callback)
     },
     onYoutubeProgress: (listener: (progress: unknown) => void) => {
         const callback = (
             _event: Electron.IpcRendererEvent,
             progress: unknown,
-        ) => listener(progress);
-        ipcRenderer.on('youtube:progress', callback);
-        return () => ipcRenderer.removeListener('youtube:progress', callback);
+        ) => listener(progress)
+        ipcRenderer.on('youtube:progress', callback)
+        return () => ipcRenderer.removeListener('youtube:progress', callback)
     },
     settings: {
         get: () => invoke('settings:get'),
@@ -95,13 +95,13 @@ contextBridge.exposeInMainWorld('tanzaku', {
         show: () => invoke('overlay:show'),
         hide: () => invoke('overlay:hide'),
         setBounds: (bounds: {
-            x: number;
-            y: number;
-            width: number;
-            height: number;
+            x: number
+            y: number
+            width: number
+            height: number
         }) => invoke('overlay:set-bounds', bounds),
     },
     storage: {
         chooseDirectory: () => invoke('storage:choose-directory'),
     },
-});
+})

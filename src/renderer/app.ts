@@ -1,58 +1,58 @@
 interface Window {
-    tanzaku: any;
+    tanzaku: any
 }
 
 type PlaybackState = {
-    status: string;
-    position: number;
-    duration: number;
-    speed: number;
-    currentEventIndex: number;
-};
+    status: string
+    position: number
+    duration: number
+    speed: number
+    currentEventIndex: number
+}
 
 type PlaybackPlan = {
-    duration: number;
+    duration: number
     events: Array<{
-        time: number;
-        hold: number;
-        keys: Array<{ name: string; label: string; modifier: string | null }>;
-    }>;
-};
+        time: number
+        hold: number
+        keys: Array<{ name: string; label: string; modifier: string | null }>
+    }>
+}
 
 type Playlist = {
-    id: string;
-    name: string;
-    trackIds: string[];
-};
+    id: string
+    name: string
+    trackIds: string[]
+}
 
-const PX_PER_SECOND = 120;
+const PX_PER_SECOND = 120
 const KEY_GROUPS = [
     { label: 'Tom baixo', keys: ['Z', 'X', 'C', 'V', 'B', 'N', 'M'] },
     { label: 'Tom médio', keys: ['A', 'S', 'D', 'F', 'G', 'H', 'J'] },
     { label: 'Tom alto', keys: ['Q', 'W', 'E', 'R', 'T', 'Y', 'U'] },
-];
-const overlay = new URLSearchParams(location.search).has('overlay');
-const app = document.querySelector<HTMLElement>('#app')!;
-let currentPlan: PlaybackPlan | null = null;
+]
+const overlay = new URLSearchParams(location.search).has('overlay')
+const app = document.querySelector<HTMLElement>('#app')!
+let currentPlan: PlaybackPlan | null = null
 let currentState: PlaybackState = {
     status: 'idle',
     position: 0,
     duration: 0,
     speed: 1,
     currentEventIndex: 0,
-};
-let selectedId = '';
-let selectedTitle = 'Selecione uma música';
-let playlists: Playlist[] = [];
-let selectedPlaylistId = '';
-let repeatEnabled = false;
-let inputModalMode: 'playlist' | 'youtube' | null = null;
-let youtubeProgress: string | null = null;
-let seeking = false;
-let seekPreview: number | null = null;
-let resumeAfterSeek = false;
-let countdownRemaining: number | null = null;
-let framePending = false;
+}
+let selectedId = ''
+let selectedTitle = 'Selecione uma música'
+let playlists: Playlist[] = []
+let selectedPlaylistId = ''
+let repeatEnabled = false
+let inputModalMode: 'playlist' | 'youtube' | null = null
+let youtubeProgress: string | null = null
+let seeking = false
+let seekPreview: number | null = null
+let resumeAfterSeek = false
+let countdownRemaining: number | null = null
+let framePending = false
 
 function rollMarkup(): string {
     return `
@@ -77,7 +77,7 @@ function rollMarkup(): string {
                         </section>`,
                 ).join('')}
             </div>
-        </div>`;
+        </div>`
 }
 
 function renderShell(): void {
@@ -86,8 +86,8 @@ function renderShell(): void {
             <section class="overlay-shell">
                 <div class="overlay-heading"><strong>Tanzaku</strong><span id="overlay-state">Pronto</span></div>
                 ${rollMarkup()}
-            </section>`;
-        return;
+            </section>`
+        return
     }
 
     app.innerHTML = `
@@ -131,21 +131,21 @@ function renderShell(): void {
                 <div class="input-modal-actions"><button class="secondary-button" id="input-modal-cancel">Cancelar</button><button class="primary-button" id="input-modal-submit">Continuar</button></div>
             </div>
         </div>
-        </div>`;
+        </div>`
 }
 
 function formatTime(seconds: number): string {
-    const safe = Math.max(0, Math.floor(seconds));
-    const hours = Math.floor(safe / 3600);
-    const minutes = Math.floor((safe % 3600) / 60);
-    const remaining = safe % 60;
+    const safe = Math.max(0, Math.floor(seconds))
+    const hours = Math.floor(safe / 3600)
+    const minutes = Math.floor((safe % 3600) / 60)
+    const remaining = safe % 60
     if (hours > 0)
         return `${hours.toString().padStart(2, '0')}:${minutes
             .toString()
-            .padStart(2, '0')}:${remaining.toString().padStart(2, '0')}`;
+            .padStart(2, '0')}:${remaining.toString().padStart(2, '0')}`
     return `${minutes.toString().padStart(2, '0')}:${remaining
         .toString()
-        .padStart(2, '0')}`;
+        .padStart(2, '0')}`
 }
 
 function escapeHtml(value: string): string {
@@ -159,7 +159,7 @@ function escapeHtml(value: string): string {
                 "'": '&#39;',
                 '"': '&quot;',
             })[character] ?? character,
-    );
+    )
 }
 
 function statusLabel(status: string): string {
@@ -172,35 +172,35 @@ function statusLabel(status: string): string {
             stopped: 'Parado',
             ended: 'Concluído',
         }[status] ?? status
-    );
+    )
 }
 
 function showError(error: unknown): void {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error ? error.message : String(error)
     const target = document.querySelector<HTMLElement>(
         '#status, #overlay-state',
-    );
+    )
     if (target) {
-        target.textContent = 'Erro';
-        target.title = message;
+        target.textContent = 'Erro'
+        target.title = message
     }
-    console.error(message);
+    console.error(message)
 }
 
 function renderLibrary(entries: any[]): void {
-    const target = document.querySelector('#library');
-    if (!target) return;
+    const target = document.querySelector('#library')
+    if (!target) return
     if (!entries.length) {
         target.innerHTML =
-            '<div class="empty-state">Nenhum MIDI ainda.<br>Importe uma música para começar.</div>';
-        return;
+            '<div class="empty-state">Nenhum MIDI ainda.<br>Importe uma música para começar.</div>'
+        return
     }
     target.innerHTML = entries
         .map(
             (entry) =>
                 `<div class="song-row"><button class="song ${entry.id === selectedId ? 'active' : ''}" data-id="${escapeHtml(entry.id)}"><span class="song-icon">♫</span><span class="song-copy"><strong>${escapeHtml(entry.title)}</strong><small>MIDI local</small></span></button><button class="song-add" data-track-id="${escapeHtml(entry.id)}" title="Adicionar à playlist">＋</button></div>`,
         )
-        .join('');
+        .join('')
     target
         .querySelectorAll<HTMLButtonElement>('.song')
         .forEach((button) =>
@@ -208,7 +208,7 @@ function renderLibrary(entries: any[]): void {
                 'click',
                 () => void openSong(button.dataset.id ?? ''),
             ),
-        );
+        )
     target
         .querySelectorAll<HTMLButtonElement>('.song-add')
         .forEach((button) =>
@@ -216,17 +216,17 @@ function renderLibrary(entries: any[]): void {
                 'click',
                 () => void addTrackToPlaylist(button.dataset.trackId ?? ''),
             ),
-        );
+        )
 }
 
 function renderPlaylists(entries: Playlist[]): void {
-    playlists = entries;
-    const target = document.querySelector('#playlists');
-    if (!target) return;
+    playlists = entries
+    const target = document.querySelector('#playlists')
+    if (!target) return
     if (!entries.length) {
         target.innerHTML =
-            '<div class="empty-state compact">Crie uma playlist para organizar suas músicas.</div>';
-        return;
+            '<div class="empty-state compact">Crie uma playlist para organizar suas músicas.</div>'
+        return
     }
     target.innerHTML = entries
         .map(
@@ -238,15 +238,15 @@ function renderPlaylists(entries: Playlist[]): void {
                     <button class="playlist-action danger" data-playlist-action="delete" data-playlist-id="${escapeHtml(playlist.id)}" title="Excluir playlist">×</button>
                 </div>`,
         )
-        .join('');
+        .join('')
     target
         .querySelectorAll<HTMLButtonElement>('.playlist-select')
         .forEach((button) =>
             button.addEventListener('click', () => {
-                selectedPlaylistId = button.dataset.playlistId ?? '';
-                renderPlaylists(playlists);
+                selectedPlaylistId = button.dataset.playlistId ?? ''
+                renderPlaylists(playlists)
             }),
-        );
+        )
     target
         .querySelectorAll<HTMLButtonElement>('.playlist-action')
         .forEach((button) =>
@@ -258,27 +258,27 @@ function renderPlaylists(entries: Playlist[]): void {
                         button.dataset.playlistAction ?? '',
                     ),
             ),
-        );
+        )
 }
 
 async function addTrackToPlaylist(trackId: string): Promise<void> {
     if (!selectedPlaylistId) {
         showError(
             new Error('Selecione uma playlist antes de adicionar a música.'),
-        );
-        return;
+        )
+        return
     }
     try {
         const playlist = await window.tanzaku.playlists.add(
             selectedPlaylistId,
             trackId,
-        );
+        )
         playlists = playlists.map((item) =>
             item.id === playlist.id ? playlist : item,
-        );
-        renderPlaylists(playlists);
+        )
+        renderPlaylists(playlists)
     } catch (error) {
-        showError(error);
+        showError(error)
     }
 }
 
@@ -288,309 +288,300 @@ async function handlePlaylistAction(
 ): Promise<void> {
     try {
         if (action === 'delete') {
-            if (!window.confirm('Excluir esta playlist?')) return;
-            await window.tanzaku.playlists.remove(playlistId);
-            if (selectedPlaylistId === playlistId) selectedPlaylistId = '';
-            renderPlaylists(await window.tanzaku.playlists.list());
-            return;
+            if (!window.confirm('Excluir esta playlist?')) return
+            await window.tanzaku.playlists.remove(playlistId)
+            if (selectedPlaylistId === playlistId) selectedPlaylistId = ''
+            renderPlaylists(await window.tanzaku.playlists.list())
+            return
         }
-        selectedPlaylistId = playlistId;
-        renderPlaylists(playlists);
+        selectedPlaylistId = playlistId
+        renderPlaylists(playlists)
         await window.tanzaku.playlists.play(
             playlistId,
             action === 'shuffle' ? 'shuffle' : 'order',
-        );
+        )
     } catch (error) {
-        showError(error);
+        showError(error)
     }
 }
 
 function openInputModal(mode: 'playlist' | 'youtube'): void {
-    inputModalMode = mode;
-    const modal = document.querySelector<HTMLElement>('#input-modal');
-    const title = document.querySelector('#input-modal-title');
-    const description = document.querySelector('#input-modal-description');
-    const input =
-        document.querySelector<HTMLInputElement>('#input-modal-value');
+    inputModalMode = mode
+    const modal = document.querySelector<HTMLElement>('#input-modal')
+    const title = document.querySelector('#input-modal-title')
+    const description = document.querySelector('#input-modal-description')
+    const input = document.querySelector<HTMLInputElement>('#input-modal-value')
     const submit = document.querySelector<HTMLButtonElement>(
         '#input-modal-submit',
-    );
-    const progress = document.querySelector('#input-modal-progress');
+    )
+    const progress = document.querySelector('#input-modal-progress')
     if (!modal || !title || !description || !input || !submit || !progress)
-        return;
+        return
     title.textContent =
-        mode === 'playlist' ? 'Nova playlist' : 'Adicionar do YouTube';
+        mode === 'playlist' ? 'Nova playlist' : 'Adicionar do YouTube'
     description.textContent =
         mode === 'playlist'
             ? 'Escolha um nome para a playlist.'
-            : 'Cole a URL de um vídeo individual do YouTube.';
+            : 'Cole a URL de um vídeo individual do YouTube.'
     input.placeholder =
         mode === 'playlist'
             ? 'Nome da playlist'
-            : 'https://youtube.com/watch?v=...';
-    input.value = '';
-    progress.textContent = '';
-    submit.textContent = mode === 'playlist' ? 'Criar' : 'Converter';
-    submit.disabled = false;
-    modal.hidden = false;
-    input.focus();
+            : 'https://youtube.com/watch?v=...'
+    input.value = ''
+    progress.textContent = ''
+    submit.textContent = mode === 'playlist' ? 'Criar' : 'Converter'
+    submit.disabled = false
+    modal.hidden = false
+    input.focus()
 }
 
 function closeInputModal(): void {
-    inputModalMode = null;
-    youtubeProgress = null;
-    const modal = document.querySelector<HTMLElement>('#input-modal');
-    if (modal) modal.hidden = true;
-    requestRender();
+    inputModalMode = null
+    youtubeProgress = null
+    const modal = document.querySelector<HTMLElement>('#input-modal')
+    if (modal) modal.hidden = true
+    requestRender()
 }
 
 async function submitInputModal(): Promise<void> {
-    const input =
-        document.querySelector<HTMLInputElement>('#input-modal-value');
+    const input = document.querySelector<HTMLInputElement>('#input-modal-value')
     const submit = document.querySelector<HTMLButtonElement>(
         '#input-modal-submit',
-    );
+    )
     const progress = document.querySelector<HTMLElement>(
         '#input-modal-progress',
-    );
-    const value = input?.value.trim() ?? '';
-    if (!inputModalMode || !value || !submit) return;
-    submit.disabled = true;
+    )
+    const value = input?.value.trim() ?? ''
+    if (!inputModalMode || !value || !submit) return
+    submit.disabled = true
     try {
         if (inputModalMode === 'playlist') {
-            const playlist = await window.tanzaku.playlists.create(value);
-            selectedPlaylistId = playlist.id;
-            renderPlaylists(await window.tanzaku.playlists.list());
+            const playlist = await window.tanzaku.playlists.create(value)
+            selectedPlaylistId = playlist.id
+            renderPlaylists(await window.tanzaku.playlists.list())
         } else {
-            const entry = await window.tanzaku.library.addYoutube(value);
-            renderLibrary(await window.tanzaku.library.list());
-            if (progress) progress.textContent = `Salvo: ${entry.title}`;
+            const entry = await window.tanzaku.library.addYoutube(value)
+            renderLibrary(await window.tanzaku.library.list())
+            if (progress) progress.textContent = `Salvo: ${entry.title}`
         }
-        closeInputModal();
+        closeInputModal()
     } catch (error) {
-        showError(error);
-        submit.disabled = false;
-        if (progress) progress.textContent = 'Não foi possível concluir.';
+        showError(error)
+        submit.disabled = false
+        if (progress) progress.textContent = 'Não foi possível concluir.'
     }
 }
 
 async function openSong(id: string): Promise<void> {
-    if (!id) return;
+    if (!id) return
     try {
-        const plan = await window.tanzaku.playback.load(id);
-        selectedId = id;
+        const plan = await window.tanzaku.playback.load(id)
+        selectedId = id
         const button = document.querySelector<HTMLButtonElement>(
             `.song[data-id="${CSS.escape(id)}"]`,
-        );
-        selectedTitle = button?.querySelector('strong')?.textContent ?? id;
-        const title = document.querySelector('#selected');
-        if (title) title.textContent = selectedTitle;
-        renderPlan(plan);
+        )
+        selectedTitle = button?.querySelector('strong')?.textContent ?? id
+        const title = document.querySelector('#selected')
+        if (title) title.textContent = selectedTitle
+        renderPlan(plan)
         document
             .querySelectorAll('.song')
-            .forEach((item) => item.classList.remove('active'));
-        button?.classList.add('active');
+            .forEach((item) => item.classList.remove('active'))
+        button?.classList.add('active')
     } catch (error) {
-        showError(error);
+        showError(error)
     }
 }
 
 function renderPlan(plan: PlaybackPlan): void {
-    currentPlan = plan;
-    const width = Math.max(900, plan.duration * PX_PER_SECOND);
-    const content = document.querySelector<HTMLElement>('#roll-content');
-    if (content) content.style.width = `${width}px`;
+    currentPlan = plan
+    const width = Math.max(900, plan.duration * PX_PER_SECOND)
+    const content = document.querySelector<HTMLElement>('#roll-content')
+    if (content) content.style.width = `${width}px`
     document.querySelectorAll<HTMLElement>('.lane-track').forEach((track) => {
-        track.innerHTML = '';
-        track.style.width = `${width}px`;
-    });
+        track.innerHTML = ''
+        track.style.width = `${width}px`
+    })
     plan.events.forEach((event, index) => {
-        const key = event.keys[0];
-        if (!key) return;
+        const key = event.keys[0]
+        if (!key) return
         const track = document.querySelector<HTMLElement>(
             `.lane-track[data-track="${CSS.escape(key.name)}"]`,
-        );
-        if (!track) return;
-        const note = document.createElement('span');
-        note.className = `note ${key.modifier ?? 'natural'}`;
-        note.dataset.index = String(index);
-        note.textContent = key.label;
-        note.title = `${key.label} · ${formatTime(event.time)} · ${event.hold.toFixed(2)}s`;
-        note.style.left = `${event.time * PX_PER_SECOND}px`;
-        note.style.width = `${Math.max(28, event.hold * PX_PER_SECOND)}px`;
-        track.append(note);
-    });
-    const summary = document.querySelector('#plan-summary');
+        )
+        if (!track) return
+        const note = document.createElement('span')
+        note.className = `note ${key.modifier ?? 'natural'}`
+        note.dataset.index = String(index)
+        note.textContent = key.label
+        note.title = `${key.label} · ${formatTime(event.time)} · ${event.hold.toFixed(2)}s`
+        note.style.left = `${event.time * PX_PER_SECOND}px`
+        note.style.width = `${Math.max(28, event.hold * PX_PER_SECOND)}px`
+        track.append(note)
+    })
+    const summary = document.querySelector('#plan-summary')
     if (summary)
-        summary.textContent = `${plan.events.length} eventos · ${formatTime(plan.duration)}`;
-    requestRender();
+        summary.textContent = `${plan.events.length} eventos · ${formatTime(plan.duration)}`
+    requestRender()
 }
 
 function renderFrame(): void {
-    framePending = false;
-    const visualPosition = seekPreview ?? currentState.position;
-    const duration = Math.max(0.001, currentState.duration);
-    const cursorLeft = visualPosition * PX_PER_SECOND;
+    framePending = false
+    const visualPosition = seekPreview ?? currentState.position
+    const duration = Math.max(0.001, currentState.duration)
+    const cursorLeft = visualPosition * PX_PER_SECOND
     document.querySelectorAll<HTMLElement>('.roll-cursor').forEach((cursor) => {
-        cursor.style.left = `${cursorLeft}px`;
-    });
+        cursor.style.left = `${cursorLeft}px`
+    })
     document.querySelectorAll<HTMLElement>('.note').forEach((note) => {
-        const index = Number(note.dataset.index);
-        note.classList.toggle('played', index < currentState.currentEventIndex);
+        const index = Number(note.dataset.index)
+        note.classList.toggle('played', index < currentState.currentEventIndex)
         note.classList.toggle(
             'current',
             index === currentState.currentEventIndex - 1,
-        );
-    });
-    const seek = document.querySelector<HTMLInputElement>('#seek');
+        )
+    })
+    const seek = document.querySelector<HTMLInputElement>('#seek')
     if (seek && !seeking) {
-        seek.max = String(currentState.duration);
-        seek.value = String(Math.min(currentState.duration, visualPosition));
+        seek.max = String(currentState.duration)
+        seek.value = String(Math.min(currentState.duration, visualPosition))
     }
-    const position = document.querySelector('#position');
-    const durationElement = document.querySelector('#duration');
-    if (position) position.textContent = formatTime(visualPosition);
+    const position = document.querySelector('#position')
+    const durationElement = document.querySelector('#duration')
+    if (position) position.textContent = formatTime(visualPosition)
     if (durationElement)
-        durationElement.textContent = formatTime(currentState.duration);
-    const status = document.querySelector('#status, #overlay-state');
+        durationElement.textContent = formatTime(currentState.duration)
+    const status = document.querySelector('#status, #overlay-state')
     if (status)
         status.textContent =
             youtubeProgress ??
             (countdownRemaining === null
                 ? statusLabel(currentState.status)
-                : `Começa em ${countdownRemaining}s`);
-    const playToggle =
-        document.querySelector<HTMLButtonElement>('#play-toggle');
+                : `Começa em ${countdownRemaining}s`)
+    const playToggle = document.querySelector<HTMLButtonElement>('#play-toggle')
     if (playToggle) {
-        const playing = currentState.status === 'playing';
-        playToggle.textContent = playing ? 'Ⅱ' : '▶';
-        playToggle.title = playing ? 'Pausar' : 'Reproduzir';
-        playToggle.disabled = countdownRemaining !== null;
-        playToggle.setAttribute(
-            'aria-label',
-            playing ? 'Pausar' : 'Reproduzir',
-        );
+        const playing = currentState.status === 'playing'
+        playToggle.textContent = playing ? 'Ⅱ' : '▶'
+        playToggle.title = playing ? 'Pausar' : 'Reproduzir'
+        playToggle.disabled = countdownRemaining !== null
+        playToggle.setAttribute('aria-label', playing ? 'Pausar' : 'Reproduzir')
     }
     const repeatToggle =
-        document.querySelector<HTMLButtonElement>('#repeat-toggle');
+        document.querySelector<HTMLButtonElement>('#repeat-toggle')
     if (repeatToggle) {
-        repeatToggle.classList.toggle('active', repeatEnabled);
+        repeatToggle.classList.toggle('active', repeatEnabled)
         repeatToggle.title = repeatEnabled
             ? 'Repetição ativada'
-            : 'Repetir música';
+            : 'Repetir música'
         repeatToggle.setAttribute(
             'aria-label',
             repeatEnabled ? 'Desativar repetição' : 'Repetir música',
-        );
+        )
     }
-    const speed = document.querySelector<HTMLSelectElement>('#speed');
+    const speed = document.querySelector<HTMLSelectElement>('#speed')
     if (speed && document.activeElement !== speed)
-        speed.value = String(currentState.speed);
+        speed.value = String(currentState.speed)
 
     if (currentState.status === 'playing' && !seeking) {
         document
             .querySelectorAll<HTMLElement>('.roll-scroll')
             .forEach((scroll) => {
-                const target = cursorLeft - scroll.clientWidth * 0.45;
+                const target = cursorLeft - scroll.clientWidth * 0.45
                 if (target > scroll.scrollLeft || target < scroll.scrollLeft)
-                    scroll.scrollLeft = Math.max(0, target);
-            });
+                    scroll.scrollLeft = Math.max(0, target)
+            })
     }
-    void duration;
+    void duration
 }
 
 function requestRender(): void {
-    if (framePending) return;
-    framePending = true;
-    requestAnimationFrame(renderFrame);
+    if (framePending) return
+    framePending = true
+    requestAnimationFrame(renderFrame)
 }
 
 function bindControls(): void {
     document
         .querySelector('#window-minimize')
-        ?.addEventListener(
-            'click',
-            () => void window.tanzaku.window.minimize(),
-        );
+        ?.addEventListener('click', () => void window.tanzaku.window.minimize())
     document
         .querySelector('#window-maximize')
         ?.addEventListener(
             'click',
             () => void window.tanzaku.window.toggleMaximize(),
-        );
+        )
     document
         .querySelector('#window-close')
-        ?.addEventListener('click', () => void window.tanzaku.window.close());
+        ?.addEventListener('click', () => void window.tanzaku.window.close())
     document.querySelector('#play-toggle')?.addEventListener('click', () => {
         if (currentState.status === 'playing')
-            void window.tanzaku.playback.pause();
-        else void window.tanzaku.playback.play();
-    });
+            void window.tanzaku.playback.pause()
+        else void window.tanzaku.playback.play()
+    })
     document
         .querySelector('#stop')
-        ?.addEventListener('click', () => void window.tanzaku.playback.stop());
+        ?.addEventListener('click', () => void window.tanzaku.playback.stop())
     document
         .querySelector('#repeat-toggle')
         ?.addEventListener('click', async () => {
             repeatEnabled = Boolean(
                 await window.tanzaku.playback.toggleRepeat(),
-            );
-            requestRender();
-        });
+            )
+            requestRender()
+        })
     document
         .querySelector('#playlist-create')
-        ?.addEventListener('click', () => openInputModal('playlist'));
+        ?.addEventListener('click', () => openInputModal('playlist'))
     document
         .querySelector('#youtube-import')
-        ?.addEventListener('click', () => openInputModal('youtube'));
+        ?.addEventListener('click', () => openInputModal('youtube'))
     document
         .querySelector('#input-modal-cancel')
-        ?.addEventListener('click', closeInputModal);
+        ?.addEventListener('click', closeInputModal)
     document
         .querySelector('#input-modal-submit')
-        ?.addEventListener('click', () => void submitInputModal());
+        ?.addEventListener('click', () => void submitInputModal())
     document
         .querySelector('#input-modal-value')
         ?.addEventListener('keydown', (event) => {
-            const key = (event as KeyboardEvent).key;
-            if (key === 'Enter') void submitInputModal();
-            if (key === 'Escape') closeInputModal();
-        });
+            const key = (event as KeyboardEvent).key
+            if (key === 'Enter') void submitInputModal()
+            if (key === 'Escape') closeInputModal()
+        })
     document.querySelector('#import')?.addEventListener('click', async () => {
         try {
-            const entry = await window.tanzaku.library.import();
-            if (entry) renderLibrary(await window.tanzaku.library.list());
+            const entry = await window.tanzaku.library.import()
+            if (entry) renderLibrary(await window.tanzaku.library.list())
         } catch (error) {
-            showError(error);
+            showError(error)
         }
-    });
+    })
     document.querySelector('#seek')?.addEventListener('pointerdown', () => {
-        seeking = true;
-        seekPreview = currentState.position;
-        resumeAfterSeek = currentState.status === 'playing';
-        if (resumeAfterSeek) void window.tanzaku.playback.pause();
-    });
+        seeking = true
+        seekPreview = currentState.position
+        resumeAfterSeek = currentState.status === 'playing'
+        if (resumeAfterSeek) void window.tanzaku.playback.pause()
+    })
     document.querySelector('#seek')?.addEventListener('input', (event) => {
-        seekPreview = Number((event.target as HTMLInputElement).value);
-        requestRender();
-    });
+        seekPreview = Number((event.target as HTMLInputElement).value)
+        requestRender()
+    })
     const commitSeek = (value: number): void => {
-        const shouldResume = resumeAfterSeek;
-        seeking = false;
-        seekPreview = null;
-        resumeAfterSeek = false;
+        const shouldResume = resumeAfterSeek
+        seeking = false
+        seekPreview = null
+        resumeAfterSeek = false
         void window.tanzaku.playback.seek(value).then(() => {
-            if (shouldResume) void window.tanzaku.playback.play();
-        });
-    };
+            if (shouldResume) void window.tanzaku.playback.play()
+        })
+    }
     document.querySelector('#seek')?.addEventListener('change', (event) => {
-        commitSeek(Number((event.target as HTMLInputElement).value));
-    });
+        commitSeek(Number((event.target as HTMLInputElement).value))
+    })
     window.addEventListener('pointerup', () => {
-        if (!seeking) return;
-        const seek = document.querySelector<HTMLInputElement>('#seek');
-        if (seek) commitSeek(Number(seek.value));
-    });
+        if (!seeking) return
+        const seek = document.querySelector<HTMLInputElement>('#seek')
+        if (seek) commitSeek(Number(seek.value))
+    })
     document
         .querySelector('#speed')
         ?.addEventListener(
@@ -599,50 +590,49 @@ function bindControls(): void {
                 void window.tanzaku.playback.setSpeed(
                     Number((event.target as HTMLSelectElement).value),
                 ),
-        );
+        )
     document
         .querySelector('#overlay-button')
-        ?.addEventListener('click', () => void window.tanzaku.overlay.show());
+        ?.addEventListener('click', () => void window.tanzaku.overlay.show())
     document.querySelector('#folder')?.addEventListener('click', async () => {
         try {
-            const directory = await window.tanzaku.storage.chooseDirectory();
+            const directory = await window.tanzaku.storage.chooseDirectory()
             if (directory) {
-                const target = document.querySelector('#folder-name');
-                if (target) target.textContent = directory;
-                selectedId = '';
-                selectedTitle = 'Selecione uma música';
-                renderLibrary(await window.tanzaku.library.list());
-                renderPlaylists(await window.tanzaku.playlists.list());
-                const title = document.querySelector('#selected');
-                if (title) title.textContent = selectedTitle;
+                const target = document.querySelector('#folder-name')
+                if (target) target.textContent = directory
+                selectedId = ''
+                selectedTitle = 'Selecione uma música'
+                renderLibrary(await window.tanzaku.library.list())
+                renderPlaylists(await window.tanzaku.playlists.list())
+                const title = document.querySelector('#selected')
+                if (title) title.textContent = selectedTitle
             }
         } catch (error) {
-            showError(error);
+            showError(error)
         }
-    });
+    })
 }
 
-renderShell();
+renderShell()
 if (!overlay) {
-    bindControls();
-    void window.tanzaku.library.list().then(renderLibrary).catch(showError);
-    void window.tanzaku.playlists.list().then(renderPlaylists).catch(showError);
+    bindControls()
+    void window.tanzaku.library.list().then(renderLibrary).catch(showError)
+    void window.tanzaku.playlists.list().then(renderPlaylists).catch(showError)
     void window.tanzaku.settings
         .get()
         .then((settings: { storageRoot?: string }) => {
-            const target = document.querySelector('#folder-name');
+            const target = document.querySelector('#folder-name')
             if (target)
-                target.textContent =
-                    settings.storageRoot ?? 'Padrão do usuário';
+                target.textContent = settings.storageRoot ?? 'Padrão do usuário'
         })
-        .catch(showError);
+        .catch(showError)
 }
 window.tanzaku?.onTrack((track: { id?: string; title?: string }) => {
-    if (!track?.id) return;
-    selectedId = track.id;
-    selectedTitle = track.title ?? track.id;
-    const title = document.querySelector('#selected');
-    if (title) title.textContent = selectedTitle;
+    if (!track?.id) return
+    selectedId = track.id
+    selectedTitle = track.title ?? track.id
+    const title = document.querySelector('#selected')
+    if (title) title.textContent = selectedTitle
     document
         .querySelectorAll('.song')
         .forEach((item) =>
@@ -650,27 +640,27 @@ window.tanzaku?.onTrack((track: { id?: string; title?: string }) => {
                 'active',
                 (item as HTMLElement).dataset.id === selectedId,
             ),
-        );
-});
+        )
+})
 window.tanzaku?.playback.onState((state: PlaybackState) => {
-    currentState = state;
-    if (state.status === 'playing') countdownRemaining = null;
-    requestRender();
-});
-window.tanzaku?.playback.onPlan((plan: PlaybackPlan) => renderPlan(plan));
+    currentState = state
+    if (state.status === 'playing') countdownRemaining = null
+    requestRender()
+})
+window.tanzaku?.playback.onPlan((plan: PlaybackPlan) => renderPlan(plan))
 window.tanzaku?.playback.onCountdown((value: { remaining?: number }) => {
-    const remaining = Number(value?.remaining);
-    countdownRemaining = remaining > 0 ? remaining : null;
-    requestRender();
-});
+    const remaining = Number(value?.remaining)
+    countdownRemaining = remaining > 0 ? remaining : null
+    requestRender()
+})
 window.tanzaku?.onYoutubeProgress(
     (value: { stage?: string; percent?: number }) => {
-        const percent = Number(value?.percent);
+        const percent = Number(value?.percent)
         youtubeProgress = value?.stage
             ? `${value.stage}${Number.isFinite(percent) && percent > 0 ? ` ${percent.toFixed(0)}%` : ''}`
-            : null;
-        const progress = document.querySelector('#input-modal-progress');
-        if (progress) progress.textContent = youtubeProgress ?? '';
-        requestRender();
+            : null
+        const progress = document.querySelector('#input-modal-progress')
+        if (progress) progress.textContent = youtubeProgress ?? ''
+        requestRender()
     },
-);
+)
