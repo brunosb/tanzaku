@@ -193,6 +193,7 @@ function showError(error: unknown): void {
         target.title = message
     }
     console.error(message)
+    window.alert(message)
 }
 
 function renderLibrary(entries: any[]): void {

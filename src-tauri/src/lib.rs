@@ -184,7 +184,7 @@ fn storage_choose_directory() -> Result<Option<String>, String> {
 
 #[tauri::command]
 fn storage_set_directory(path: String) -> Result<Option<String>, String> {
-    let root = std::path::PathBuf::from(path.trim());
+    let root = std::path::PathBuf::from(path.trim().trim_matches('"'));
     if root.as_os_str().is_empty() {
         return Ok(None);
     }
@@ -192,6 +192,17 @@ fn storage_set_directory(path: String) -> Result<Option<String>, String> {
 }
 
 fn storage_set_directory_path(root: std::path::PathBuf) -> Result<Option<String>, String> {
+    let root = if root.join("library.json").is_file() {
+        root
+    } else if root.file_name().is_some_and(|name| name == "midi")
+        && root
+            .parent()
+            .is_some_and(|parent| parent.join("library.json").is_file())
+    {
+        root.parent().unwrap().to_path_buf()
+    } else {
+        root
+    };
     std::fs::create_dir_all(root.join("midi")).map_err(|error| error.to_string())?;
     std::fs::create_dir_all(root.join("plans")).map_err(|error| error.to_string())?;
     let settings = storage::read_settings();
