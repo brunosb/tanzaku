@@ -31,6 +31,28 @@ fn default_storage_root() -> PathBuf {
         .join("Tanzaku")
 }
 
+fn pointer_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    for base in [dirs::data_dir(), dirs::config_dir()].into_iter().flatten() {
+        let root = base.join("Tanzaku");
+        if !roots.contains(&root) {
+            roots.push(root);
+        }
+    }
+    roots
+}
+
+fn selected_root(pointer: &Path) -> Option<PathBuf> {
+    fs::read_to_string(pointer.join("settings.json"))
+        .ok()
+        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+        .and_then(|settings| settings.get("storageRoot")?.as_str().map(PathBuf::from))
+        .filter(|path| {
+            !path.as_os_str().is_empty()
+                && (path.join("library.json").is_file() || path.join("midi").is_dir())
+        })
+}
+
 pub fn storage_root() -> PathBuf {
     if let Ok(value) = env::var("TANZAKU_DATA_DIR") {
         if !value.trim().is_empty() {
@@ -39,13 +61,9 @@ pub fn storage_root() -> PathBuf {
     }
 
     let default = default_storage_root();
-    let pointer = default.join("settings.json");
-    let selected = fs::read_to_string(pointer)
-        .ok()
-        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
-        .and_then(|settings| settings.get("storageRoot")?.as_str().map(PathBuf::from));
-    selected
-        .filter(|path| !path.as_os_str().is_empty())
+    pointer_roots()
+        .iter()
+        .find_map(|pointer| selected_root(pointer))
         .unwrap_or(default)
 }
 

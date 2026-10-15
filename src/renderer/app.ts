@@ -621,7 +621,7 @@ function renderFrame(): void {
     const duration = Math.max(0.001, currentState.duration)
     const cursorLeft = visualPosition * PX_PER_SECOND
     document.querySelectorAll<HTMLElement>('.roll-cursor').forEach((cursor) => {
-        cursor.style.left = `${cursorLeft}px`
+        cursor.style.left = `calc(clamp(32px, 4vw, 48px) + ${cursorLeft}px)`
     })
     document.querySelectorAll<HTMLElement>('.note').forEach((note) => {
         const index = Number(note.dataset.index)
@@ -679,6 +679,16 @@ function renderFrame(): void {
                 const target = cursorLeft - scroll.clientWidth * 0.45
                 if (target > scroll.scrollLeft || target < scroll.scrollLeft)
                     scroll.scrollLeft = Math.max(0, target)
+            })
+    } else if (
+        !seeking &&
+        (currentState.status === 'stopped' || currentState.status === 'idle') &&
+        currentState.position === 0
+    ) {
+        document
+            .querySelectorAll<HTMLElement>('.roll-scroll')
+            .forEach((scroll) => {
+                scroll.scrollLeft = 0
             })
     }
     void duration

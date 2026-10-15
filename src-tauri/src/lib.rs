@@ -211,17 +211,14 @@ fn storage_set_directory_path(root: std::path::PathBuf) -> Result<Option<String>
     std::fs::create_dir_all(root.join("plans")).map_err(|error| error.to_string())?;
     let settings = storage::read_settings();
     storage::write_settings_at(&root, settings)?;
-    let default_root = dirs::data_dir()
-        .unwrap_or_else(|| {
-            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
-        })
-        .join("Tanzaku");
-    storage::write_settings_at(
-        &default_root,
-        serde_json::json!({
-            "storageRoot": root.to_string_lossy()
-        }),
-    )?;
+    for base in [dirs::data_dir(), dirs::config_dir()].into_iter().flatten() {
+        storage::write_settings_at(
+            &base.join("Tanzaku"),
+            serde_json::json!({
+                "storageRoot": root.to_string_lossy()
+            }),
+        )?;
+    }
     Ok(Some(root.to_string_lossy().into_owned()))
 }
 
