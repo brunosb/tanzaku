@@ -39,13 +39,6 @@ export type AppSettings = {
     legacyMigrationDone?: boolean
     speed?: number
     maxPoly?: number
-    overlay?: {
-        x: number
-        y: number
-        width: number
-        height: number
-        visible: boolean
-    }
 }
 
 export type PlaybackListener = (state: PlaybackState) => void

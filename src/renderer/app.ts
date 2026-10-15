@@ -31,7 +31,6 @@ const KEY_GROUPS = [
     { label: 'Tom médio', keys: ['A', 'S', 'D', 'F', 'G', 'H', 'J'] },
     { label: 'Tom alto', keys: ['Q', 'W', 'E', 'R', 'T', 'Y', 'U'] },
 ]
-const overlay = new URLSearchParams(location.search).has('overlay')
 const app = document.querySelector<HTMLElement>('#app')!
 let currentPlan: PlaybackPlan | null = null
 let currentState: PlaybackState = {
@@ -87,15 +86,6 @@ function rollMarkup(): string {
 }
 
 function renderShell(): void {
-    if (overlay) {
-        app.innerHTML = `
-            <section class="overlay-shell">
-                <div class="overlay-heading"><strong>Tanzaku</strong><span id="overlay-state">Pronto</span></div>
-                ${rollMarkup()}
-            </section>`
-        return
-    }
-
     app.innerHTML = `
         <div class="desktop-shell">
             <header class="window-chrome">
@@ -114,7 +104,7 @@ function renderShell(): void {
                 <div class="sidebar-heading playlist-heading"><span>Playlists</span><button class="icon-button" id="playlist-create" title="Criar playlist">＋</button></div>
                 <div id="playlists" class="playlist-list"><div class="empty-state">Nenhuma playlist</div></div>
                 <div id="playlist-details" class="playlist-details"></div>
-                <div class="sidebar-footer"><button class="secondary-button" id="folder">⚙ Armazenamento</button><button class="secondary-button" id="overlay-button">▣ Mostrar overlay</button><span id="folder-name"></span></div>
+                <div class="sidebar-footer"><button class="secondary-button" id="folder">⚙ Armazenamento</button><span id="folder-name"></span></div>
             </aside>
             <main class="main-content">
                 <header class="topbar"><div><span class="eyebrow">AGORA TOCANDO</span><h1 id="selected">${selectedTitle}</h1></div><span class="status-pill" id="status">Pronto</span></header>
@@ -185,9 +175,7 @@ function statusLabel(status: string): string {
 
 function showError(error: unknown): void {
     const message = error instanceof Error ? error.message : String(error)
-    const target = document.querySelector<HTMLElement>(
-        '#status, #overlay-state',
-    )
+    const target = document.querySelector<HTMLElement>('#status')
     if (target) {
         target.textContent = 'Erro'
         target.title = message
@@ -641,7 +629,7 @@ function renderFrame(): void {
     if (position) position.textContent = formatTime(visualPosition)
     if (durationElement)
         durationElement.textContent = formatTime(currentState.duration)
-    const status = document.querySelector('#status, #overlay-state')
+    const status = document.querySelector('#status')
     if (status)
         status.textContent =
             youtubeProgress ??
@@ -796,9 +784,6 @@ function bindControls(): void {
                     Number((event.target as HTMLSelectElement).value),
                 ),
         )
-    document
-        .querySelector('#overlay-button')
-        ?.addEventListener('click', () => void window.tanzaku.overlay.show())
     document.querySelector('#folder')?.addEventListener('click', async () => {
         try {
             const directory = await window.tanzaku.storage.chooseDirectory()
@@ -819,19 +804,17 @@ function bindControls(): void {
 }
 
 renderShell()
-if (!overlay) {
-    bindControls()
-    void window.tanzaku.library.list().then(renderLibrary).catch(showError)
-    void window.tanzaku.playlists.list().then(renderPlaylists).catch(showError)
-    void window.tanzaku.settings
-        .get()
-        .then((settings: { storageRoot?: string }) => {
-            const target = document.querySelector('#folder-name')
-            if (target)
-                target.textContent = settings.storageRoot ?? 'Padrão do usuário'
-        })
-        .catch(showError)
-}
+bindControls()
+void window.tanzaku.library.list().then(renderLibrary).catch(showError)
+void window.tanzaku.playlists.list().then(renderPlaylists).catch(showError)
+void window.tanzaku.settings
+    .get()
+    .then((settings: { storageRoot?: string }) => {
+        const target = document.querySelector('#folder-name')
+        if (target)
+            target.textContent = settings.storageRoot ?? 'Padrão do usuário'
+    })
+    .catch(showError)
 window.tanzaku?.onTrack((track: { id?: string; title?: string }) => {
     if (!track?.id) return
     selectedId = track.id

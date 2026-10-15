@@ -37,7 +37,6 @@ import {
 } from '../platform/windows-input'
 
 let controlWindow: BrowserWindow | null = null
-let overlayWindow: BrowserWindow | null = null
 let layout: StorageLayout
 let library: LibraryService
 let playlistService: PlaylistService
@@ -70,7 +69,6 @@ const engine = createPlaybackEngine({
 
 function broadcast(channel: string, payload: unknown): void {
     controlWindow?.webContents.send(channel, payload)
-    overlayWindow?.webContents.send(channel, payload)
 }
 
 function requiredString(value: unknown, name: string): string {
@@ -106,27 +104,9 @@ function createWindows(): void {
             preload: path.join(__dirname, 'preload.js'),
         },
     })
-    overlayWindow = new BrowserWindow({
-        width: 1000,
-        height: 300,
-        frame: false,
-        transparent: true,
-        show: false,
-        focusable: false,
-        skipTaskbar: true,
-        alwaysOnTop: true,
-        webPreferences: {
-            contextIsolation: true,
-            nodeIntegration: false,
-            preload: path.join(__dirname, 'preload.js'),
-        },
-    })
-    overlayWindow.setIgnoreMouseEvents(true, { forward: true })
     void controlWindow.loadFile(rendererFile())
-    void overlayWindow.loadFile(rendererFile(), { query: { overlay: '1' } })
     controlWindow.on('closed', () => {
         controlWindow = null
-        if (overlayWindow) overlayWindow.close()
     })
 }
 
@@ -453,24 +433,6 @@ function setupIpc(): void {
         writeJson(layout.settings, next)
         return next
     })
-    ipcMain.handle('overlay:show', () => overlayWindow?.showInactive())
-    ipcMain.handle('overlay:hide', () => overlayWindow?.hide())
-    ipcMain.handle('overlay:set-bounds', (_event, bounds: unknown) => {
-        if (!bounds || typeof bounds !== 'object')
-            throw new Error('Bounds inválidos.')
-        const value = bounds as Record<string, unknown>
-        const numbers = ['x', 'y', 'width', 'height'].map((key) =>
-            Number(value[key]),
-        )
-        if (numbers.some((number) => !Number.isFinite(number)))
-            throw new Error('Bounds inválidos.')
-        overlayWindow?.setBounds({
-            x: numbers[0],
-            y: numbers[1],
-            width: Math.max(100, numbers[2]),
-            height: Math.max(80, numbers[3]),
-        })
-    })
     ipcMain.handle('storage:choose-directory', async () => {
         const selected = await dialog.showOpenDialog({
             properties: ['openDirectory', 'createDirectory'],
@@ -514,10 +476,6 @@ app.whenReady().then(() => {
     engine.onEvent((event, index) =>
         broadcast('playback:event', { event, index }),
     )
-    globalShortcut.register('F11', () => {
-        if (overlayWindow?.isVisible()) overlayWindow.hide()
-        else overlayWindow?.showInactive()
-    })
     globalShortcut.register('Home', () => {
         cancelPendingStart()
         engine.pause()

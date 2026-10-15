@@ -232,6 +232,22 @@ fn settings_get() -> serde_json::Value {
 }
 
 #[tauri::command]
+fn settings_update(value: serde_json::Value) -> Result<serde_json::Value, String> {
+    let mut settings = storage::read_settings();
+    if let (Some(current), Some(next)) = (settings.as_object_mut(), value.as_object()) {
+        for (key, value) in next {
+            current.insert(key.clone(), value.clone());
+        }
+    }
+    let root = storage::storage_root();
+    storage::write_settings_at(&root, settings.clone())?;
+    for base in [dirs::data_dir(), dirs::config_dir()].into_iter().flatten() {
+        storage::write_settings_at(&base.join("Tanzaku"), settings.clone())?;
+    }
+    Ok(storage::read_settings())
+}
+
+#[tauri::command]
 fn runtime_info() -> String {
     "Tanzaku Tauri experimental shell / Rust backend ativo".to_string()
 }
@@ -294,6 +310,7 @@ pub fn run() {
             transcription_infer_wav,
             transcription_wav_to_midi,
             settings_get,
+            settings_update,
             storage_choose_directory,
             storage_set_directory
         ])

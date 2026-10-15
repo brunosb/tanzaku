@@ -10,7 +10,10 @@ type TauriGlobal = {
         }
     }
     event: {
-        listen<T>(event: string, handler: (event: { payload: T }) => void): Promise<() => void>
+        listen<T>(
+            event: string,
+            handler: (event: { payload: T }) => void,
+        ): Promise<() => void>
     }
 }
 
@@ -28,8 +31,6 @@ const tauri = window.__TAURI__
 if (!tauri) throw new Error('API Tauri não disponível.')
 
 const currentWindow = tauri.window.getCurrentWindow()
-const unsupported = (operation: string) =>
-    Promise.reject(new Error(`${operation} ainda não foi migrado para Tauri.`))
 const storedStorageRoot = localStorage.getItem('tanzaku.storageRoot')
 let storageReady: Promise<unknown> = storedStorageRoot
     ? tauri.core.invoke('storage_set_directory', { path: storedStorageRoot })
@@ -78,6 +79,9 @@ const stateListeners = new Set<(state: PlaybackState) => void>()
 const eventListeners = new Set<(event: unknown, index: number) => void>()
 const countdownListeners = new Set<(value: { remaining: number }) => void>()
 let countdownGeneration = 0
+let playlistQueue: string[] = []
+let playlistQueueIndex = -1
+const trackListeners = new Set<(track: { id: string; title: string }) => void>()
 
 const emitCountdown = (remaining: number) => {
     for (const listener of countdownListeners) listener({ remaining })
@@ -105,6 +109,23 @@ const playbackPosition = () => {
 const finishPlayback = () => {
     clearPlaybackTimers()
     playbackState.position = playbackState.duration
+    if (
+        playlistQueueIndex >= 0 &&
+        playlistQueueIndex + 1 < playlistQueue.length
+    ) {
+        playlistQueueIndex++
+        const nextId = playlistQueue[playlistQueueIndex]
+        void loadTrack(nextId)
+            .then(() => startPlayback())
+            .catch((error) => {
+                playlistQueue = []
+                playlistQueueIndex = -1
+                console.error('Falha ao avançar a playlist:', error)
+            })
+        return
+    }
+    playlistQueue = []
+    playlistQueueIndex = -1
     playbackState.status = 'ended'
     emitPlaybackState()
 }
@@ -159,6 +180,20 @@ const loadPlaybackPlan = (plan: PlaybackPlan) => {
     playbackState.duration = plan.duration
     playbackState.currentEventIndex = 0
     emitPlaybackState()
+}
+
+const loadTrack = async (id: string) => {
+    const plan = await tauri.core.invoke<PlaybackPlan>('playback_load', { id })
+    loadPlaybackPlan(plan)
+    const entries =
+        await tauri.core.invoke<Array<{ id: string; title: string }>>(
+            'library_list',
+        )
+    const entry = entries.find((item) => item.id === id)
+    if (entry) {
+        for (const listener of trackListeners) listener(entry)
+    }
+    return plan
 }
 
 const startPlayback = async () => {
@@ -256,7 +291,7 @@ window.tanzaku = {
     },
     library: {
         list: () => storageReady.then(() => tauri.core.invoke('library_list')),
-        open: (id: string) => unsupported(`Abrir música ${id}`),
+        open: (id: string) => loadTrack(id),
         rename: (id: string, title: string) =>
             tauri.core.invoke('library_rename', { id, title }),
         remove: (id: string) => tauri.core.invoke('library_delete', { id }),
@@ -266,12 +301,9 @@ window.tanzaku = {
     },
     playback: {
         load: async (id: string) => {
-            const plan = await tauri.core.invoke<PlaybackPlan>(
-                'playback_load',
-                { id },
-            )
-            loadPlaybackPlan(plan)
-            return plan
+            playlistQueue = []
+            playlistQueueIndex = -1
+            return loadTrack(id)
         },
         play: async () => startPlayback(),
         pause: async () => pausePlayback(),
@@ -311,11 +343,42 @@ window.tanzaku = {
                 playlist_id: playlistId,
                 track_id: trackId,
             }),
-        play: (id: string, mode: 'order' | 'shuffle') =>
-            unsupported(`Reproduzir playlist ${id} em ${mode}`),
+        play: async (id: string, mode: 'order' | 'shuffle') => {
+            const [playlistList, entries] = await Promise.all([
+                tauri.core.invoke<Array<{ id: string; trackIds: string[] }>>(
+                    'playlist_list',
+                ),
+                tauri.core.invoke<Array<{ id: string }>>('library_list'),
+            ])
+            const playlist = playlistList.find((item) => item.id === id)
+            if (!playlist) throw new Error('Playlist não encontrada.')
+            const validIds = playlist.trackIds.filter((trackId) =>
+                entries.some((entry) => entry.id === trackId),
+            )
+            if (!validIds.length)
+                throw new Error('A playlist não possui músicas válidas.')
+            playlistQueue = [...validIds]
+            if (mode === 'shuffle') {
+                for (let index = playlistQueue.length - 1; index > 0; index--) {
+                    const target = Math.floor(Math.random() * (index + 1))
+                    ;[playlistQueue[index], playlistQueue[target]] = [
+                        playlistQueue[target],
+                        playlistQueue[index],
+                    ]
+                }
+            }
+            playlistQueueIndex = 0
+            await loadTrack(playlistQueue[0])
+            await startPlayback()
+        },
     },
-    onTrack: emptyUnsubscribe,
-    onYoutubeProgress: (listener: (value: { stage?: string; percent?: number }) => void) => {
+    onTrack: (listener: (track: { id: string; title: string }) => void) => {
+        trackListeners.add(listener)
+        return () => trackListeners.delete(listener)
+    },
+    onYoutubeProgress: (
+        listener: (value: { stage?: string; percent?: number }) => void,
+    ) => {
         let unlisten: (() => void) | undefined
         void tauri.event
             .listen<{ stage?: string; percent?: number }>(
@@ -329,19 +392,16 @@ window.tanzaku = {
     },
     settings: {
         get: () => storageReady.then(() => tauri.core.invoke('settings_get')),
-        update: (settings: unknown) => Promise.resolve(settings),
-    },
-    overlay: {
-        show: () => Promise.resolve(),
-        hide: () => Promise.resolve(),
-        setBounds: () => Promise.resolve(),
+        update: (settings: unknown) =>
+            storageReady.then(() =>
+                tauri.core.invoke('settings_update', { value: settings }),
+            ),
     },
     storage: {
         chooseDirectory: chooseStorageDirectory,
     },
     transcription: {
-        modelInfo: () =>
-            tauri.core.invoke('transcription_model_info'),
+        modelInfo: () => tauri.core.invoke('transcription_model_info'),
         inferWav: (path: string) =>
             tauri.core.invoke('transcription_infer_wav', { path }),
         wavToMidi: (wavPath: string, midiPath: string) =>

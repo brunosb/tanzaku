@@ -91,16 +91,6 @@ contextBridge.exposeInMainWorld('tanzaku', {
         get: () => invoke('settings:get'),
         update: (settings: unknown) => invoke('settings:update', settings),
     },
-    overlay: {
-        show: () => invoke('overlay:show'),
-        hide: () => invoke('overlay:hide'),
-        setBounds: (bounds: {
-            x: number
-            y: number
-            width: number
-            height: number
-        }) => invoke('overlay:set-bounds', bounds),
-    },
     storage: {
         chooseDirectory: () => invoke('storage:choose-directory'),
     },
