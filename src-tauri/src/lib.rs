@@ -206,6 +206,7 @@ fn storage_set_directory_path(root: std::path::PathBuf) -> Result<Option<String>
     } else {
         root
     };
+    std::env::set_var("TANZAKU_DATA_DIR", &root);
     std::fs::create_dir_all(root.join("midi")).map_err(|error| error.to_string())?;
     std::fs::create_dir_all(root.join("plans")).map_err(|error| error.to_string())?;
     let settings = storage::read_settings();
