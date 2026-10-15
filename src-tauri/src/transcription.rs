@@ -338,4 +338,21 @@ mod tests {
         assert_eq!(summary.onset_shape, "[1, 172, 88]");
         assert_eq!(summary.contour_shape, "[1, 172, 264]");
     }
+
+    #[test]
+    fn transcribes_wav_from_environment_when_provided() {
+        let Some(wav_path) = std::env::var_os("TANZAKU_TEST_WAV") else {
+            return;
+        };
+        let output_path = std::env::temp_dir().join("tanzaku-basic-pitch-rust.mid");
+        let model_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("models/nmp.onnx");
+        let audio = crate::audio::read_wav(std::path::Path::new(&wav_path))
+            .expect("test WAV should be readable");
+        let summary = super::transcribe_wav(&model_path, &audio.samples, &output_path)
+            .expect("Rust transcription should run");
+        println!("{summary:?}");
+        assert!(summary.frames > 0);
+        assert!(summary.notes > 0);
+        assert!(output_path.is_file());
+    }
 }
