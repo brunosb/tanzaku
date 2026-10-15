@@ -135,7 +135,7 @@ pub fn safe_file_name(value: &str) -> Result<String, String> {
     Ok(normalized.chars().take(160).collect())
 }
 
-fn midi_path(file: &str) -> Result<PathBuf, String> {
+pub fn midi_path(file: &str) -> Result<PathBuf, String> {
     let name = Path::new(file)
         .file_name()
         .ok_or_else(|| "Arquivo MIDI inválido.".to_string())?;

@@ -46,7 +46,7 @@ window.tanzaku = {
         addYoutube: (url: string) => unsupported(`Importar YouTube ${url}`),
     },
     playback: {
-        load: (id: string) => unsupported(`Carregar música ${id}`),
+        load: (id: string) => tauri.core.invoke('playback_load', { id }),
         play: () => unsupported('Reproduzir'),
         pause: () => unsupported('Pausar'),
         stop: () => unsupported('Parar'),

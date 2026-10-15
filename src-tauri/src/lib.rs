@@ -1,3 +1,5 @@
+mod midi;
+mod planner;
 mod storage;
 
 fn new_playlist_id() -> String {
@@ -47,6 +49,22 @@ fn library_delete(id: String) -> Result<Vec<storage::LibraryEntry>, String> {
         storage::write_playlists(&next)?;
     }
     Ok(remaining)
+}
+
+#[tauri::command]
+fn playback_load(id: String) -> Result<planner::PlaybackPlan, String> {
+    let entry = storage::read_library()
+        .into_iter()
+        .find(|entry| entry.id == id)
+        .ok_or_else(|| "Música não encontrada.".to_string())?;
+    let file = storage::midi_path(&entry.file)?;
+    let bytes = std::fs::read(file).map_err(|error| error.to_string())?;
+    let notes = midi::read_notes(&bytes)?;
+    let plan = planner::build_playback_plan(&notes);
+    if plan.events.is_empty() {
+        return Err("O MIDI não possui notas utilizáveis.".to_string());
+    }
+    Ok(plan)
 }
 
 #[tauri::command]
@@ -187,6 +205,7 @@ pub fn run() {
             playlist_list,
             playlist_remove_track,
             playlist_rename,
+            playback_load,
             runtime_info,
             settings_get,
             storage_choose_directory
