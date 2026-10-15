@@ -35,6 +35,14 @@ pub struct InferenceSummary {
     pub note_peak: f32,
 }
 
+#[derive(Debug, Serialize)]
+pub struct MidiTranscriptionSummary {
+    pub audio_samples: usize,
+    pub frames: usize,
+    pub notes: usize,
+    pub midi_path: String,
+}
+
 pub fn inspect_for_app(app: &tauri::AppHandle) -> Result<ModelInfo, String> {
     let path = locate_model(app)?;
     inspect_model(&path)
@@ -47,6 +55,112 @@ pub fn infer_wav_for_app(
     let model_path = locate_model(app)?;
     let audio = audio::read_wav(wav_path)?;
     infer_wav(&model_path, &audio.samples)
+}
+
+pub fn transcribe_wav_for_app(
+    app: &tauri::AppHandle,
+    wav_path: &Path,
+    midi_path: &Path,
+) -> Result<MidiTranscriptionSummary, String> {
+    let model_path = locate_model(app)?;
+    let audio = audio::read_wav(wav_path)?;
+    transcribe_wav(&model_path, &audio.samples, midi_path)
+}
+
+fn transcribe_wav(
+    model_path: &Path,
+    samples: &[f32],
+    midi_path: &Path,
+) -> Result<MidiTranscriptionSummary, String> {
+    use ndarray::Array3;
+    use ort::value::TensorRef;
+
+    const WINDOW: usize = 43_844;
+    const OVERLAP_SAMPLES: usize = 30 * 256;
+    const HOP: usize = WINDOW - OVERLAP_SAMPLES;
+    const OUTPUT_FRAMES: usize = 172;
+    const OUTPUT_COLS: usize = 88;
+
+    let runtime_path = model_path
+        .parent()
+        .and_then(Path::parent)
+        .map(|root| root.join(RUNTIME_RESOURCE_PATH));
+    let environment = match runtime_path.filter(|runtime| runtime.is_file()) {
+        Some(runtime) => ort::init_from(runtime)
+            .map_err(|error| format!("Falha ao carregar ONNX Runtime nativo: {error}"))?
+            .with_name("tanzaku-basic-pitch")
+            .build(),
+        None => ort::init().with_name("tanzaku-basic-pitch").build(),
+    }
+    .map_err(|error| format!("Falha ao iniciar ONNX Runtime: {error}"))?;
+    let mut session = Session::builder(&environment)
+        .map_err(|error| format!("Falha ao criar sessão ONNX: {error}"))?
+        .commit_from_file(model_path)
+        .map_err(|error| format!("Falha ao abrir o modelo ONNX: {error}"))?;
+
+    let mut padded = vec![0.0_f32; OVERLAP_SAMPLES / 2];
+    padded.extend_from_slice(samples);
+    let mut note_windows = Vec::new();
+    let mut onset_windows = Vec::new();
+
+    for start in (0..padded.len()).step_by(HOP) {
+        let mut window = vec![0.0_f32; WINDOW];
+        let end = (start + WINDOW).min(padded.len());
+        window[..end - start].copy_from_slice(&padded[start..end]);
+        let input = Array3::from_shape_vec((1, WINDOW, 1), window)
+            .map_err(|error| format!("Falha ao criar tensor de áudio: {error}"))?;
+        let input = TensorRef::from_array_view(input.view())
+            .map_err(|error| format!("Falha ao criar entrada ONNX: {error}"))?;
+        let outputs = session
+            .run(ort::inputs![input])
+            .map_err(|error| format!("Falha na inferência ONNX: {error}"))?;
+        note_windows.push(
+            outputs["StatefulPartitionedCall:1"]
+                .try_extract_array::<f32>()
+                .map_err(|error| format!("Saída note inválida: {error}"))?
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
+        );
+        onset_windows.push(
+            outputs["StatefulPartitionedCall:2"]
+                .try_extract_array::<f32>()
+                .map_err(|error| format!("Saída onset inválida: {error}"))?
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
+        );
+    }
+
+    let note = unwrap_windows(&note_windows, OUTPUT_FRAMES, OUTPUT_COLS, samples.len());
+    let onset = unwrap_windows(&onset_windows, OUTPUT_FRAMES, OUTPUT_COLS, samples.len());
+    let frames = note.len() / OUTPUT_COLS;
+    let notes = crate::decoder::decode_notes(&note, &onset, frames);
+    crate::decoder::write_midi(midi_path, &notes)?;
+    Ok(MidiTranscriptionSummary {
+        audio_samples: samples.len(),
+        frames,
+        notes: notes.len(),
+        midi_path: midi_path.display().to_string(),
+    })
+}
+
+fn unwrap_windows(
+    windows: &[Vec<f32>],
+    window_frames: usize,
+    columns: usize,
+    original_samples: usize,
+) -> Vec<f32> {
+    let trim = 15;
+    let target_frames = original_samples / 256;
+    let mut output = Vec::new();
+    for window in windows {
+        let start = trim * columns;
+        let end = (window_frames - trim) * columns;
+        output.extend_from_slice(&window[start..end]);
+    }
+    output.truncate(target_frames * columns);
+    output
 }
 
 fn infer_wav(model_path: &Path, samples: &[f32]) -> Result<InferenceSummary, String> {

@@ -1,4 +1,5 @@
 mod audio;
+mod decoder;
 mod input;
 mod midi;
 mod planner;
@@ -247,6 +248,19 @@ fn transcription_infer_wav(
     transcription::infer_wav_for_app(&app, std::path::Path::new(&path))
 }
 
+#[tauri::command]
+fn transcription_wav_to_midi(
+    app: tauri::AppHandle,
+    wav_path: String,
+    midi_path: String,
+) -> Result<transcription::MidiTranscriptionSummary, String> {
+    transcription::transcribe_wav_for_app(
+        &app,
+        std::path::Path::new(&wav_path),
+        std::path::Path::new(&midi_path),
+    )
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -268,6 +282,7 @@ pub fn run() {
             runtime_info,
             transcription_model_info,
             transcription_infer_wav,
+            transcription_wav_to_midi,
             settings_get,
             storage_choose_directory,
             storage_set_directory

@@ -329,6 +329,11 @@ window.tanzaku = {
             tauri.core.invoke('transcription_model_info'),
         inferWav: (path: string) =>
             tauri.core.invoke('transcription_infer_wav', { path }),
+        wavToMidi: (wavPath: string, midiPath: string) =>
+            tauri.core.invoke('transcription_wav_to_midi', {
+                wav_path: wavPath,
+                midi_path: midiPath,
+            }),
     },
 }
 
