@@ -3,6 +3,8 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
 
+use crate::audio;
+
 const MODEL_RESOURCE_PATH: &str = "models/nmp.onnx";
 const RUNTIME_RESOURCE_PATH: &str = "runtime/onnxruntime.dll";
 
@@ -22,9 +24,105 @@ pub struct ModelInfo {
     pub outputs: Vec<TensorInfo>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct InferenceSummary {
+    pub audio_samples: usize,
+    pub windows: usize,
+    pub output_frames: usize,
+    pub note_shape: String,
+    pub onset_shape: String,
+    pub contour_shape: String,
+    pub note_peak: f32,
+}
+
 pub fn inspect_for_app(app: &tauri::AppHandle) -> Result<ModelInfo, String> {
     let path = locate_model(app)?;
     inspect_model(&path)
+}
+
+pub fn infer_wav_for_app(
+    app: &tauri::AppHandle,
+    wav_path: &Path,
+) -> Result<InferenceSummary, String> {
+    let model_path = locate_model(app)?;
+    let audio = audio::read_wav(wav_path)?;
+    infer_wav(&model_path, &audio.samples)
+}
+
+fn infer_wav(model_path: &Path, samples: &[f32]) -> Result<InferenceSummary, String> {
+    use ndarray::Array3;
+    use ort::value::TensorRef;
+
+    const WINDOW: usize = 43_844;
+    const OVERLAP_FRAMES: usize = 30;
+    const FFT_HOP: usize = 256;
+    const OVERLAP_SAMPLES: usize = OVERLAP_FRAMES * FFT_HOP;
+    const HOP: usize = WINDOW - OVERLAP_SAMPLES;
+
+    let runtime_path = model_path
+        .parent()
+        .and_then(Path::parent)
+        .map(|root| root.join(RUNTIME_RESOURCE_PATH));
+    let environment = match runtime_path.filter(|runtime| runtime.is_file()) {
+        Some(runtime) => ort::init_from(runtime)
+            .map_err(|error| format!("Falha ao carregar ONNX Runtime nativo: {error}"))?
+            .with_name("tanzaku-basic-pitch")
+            .build(),
+        None => ort::init().with_name("tanzaku-basic-pitch").build(),
+    }
+    .map_err(|error| format!("Falha ao iniciar ONNX Runtime: {error}"))?;
+    let mut session = Session::builder(&environment)
+        .map_err(|error| format!("Falha ao criar sessão ONNX: {error}"))?
+        .commit_from_file(model_path)
+        .map_err(|error| format!("Falha ao abrir o modelo ONNX: {error}"))?;
+
+    let mut padded = vec![0.0_f32; OVERLAP_SAMPLES / 2];
+    padded.extend_from_slice(samples);
+    let mut windows = 0;
+    let mut output_frames = 0;
+    let mut note_shape = String::new();
+    let mut onset_shape = String::new();
+    let mut contour_shape = String::new();
+    let mut note_peak = 0.0_f32;
+
+    for start in (0..padded.len()).step_by(HOP) {
+        let mut window = vec![0.0_f32; WINDOW];
+        let end = (start + WINDOW).min(padded.len());
+        window[..end - start].copy_from_slice(&padded[start..end]);
+        let input = Array3::from_shape_vec((1, WINDOW, 1), window)
+            .map_err(|error| format!("Falha ao criar tensor de áudio: {error}"))?;
+        let input = TensorRef::from_array_view(input.view())
+            .map_err(|error| format!("Falha ao criar entrada ONNX: {error}"))?;
+        let outputs = session
+            .run(ort::inputs![input])
+            .map_err(|error| format!("Falha na inferência ONNX: {error}"))?;
+
+        let note = outputs["StatefulPartitionedCall:1"]
+            .try_extract_array::<f32>()
+            .map_err(|error| format!("Saída note inválida: {error}"))?;
+        let onset = outputs["StatefulPartitionedCall:2"]
+            .try_extract_array::<f32>()
+            .map_err(|error| format!("Saída onset inválida: {error}"))?;
+        let contour = outputs["StatefulPartitionedCall:0"]
+            .try_extract_array::<f32>()
+            .map_err(|error| format!("Saída contour inválida: {error}"))?;
+        note_shape = format!("{:?}", note.shape());
+        onset_shape = format!("{:?}", onset.shape());
+        contour_shape = format!("{:?}", contour.shape());
+        note_peak = note_peak.max(note.iter().copied().fold(0.0_f32, f32::max));
+        output_frames += note.shape().get(1).copied().unwrap_or_default();
+        windows += 1;
+    }
+
+    Ok(InferenceSummary {
+        audio_samples: samples.len(),
+        windows,
+        output_frames,
+        note_shape,
+        onset_shape,
+        contour_shape,
+        note_peak,
+    })
 }
 
 fn locate_model(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -111,5 +209,19 @@ mod tests {
         assert_eq!(info.outputs.len(), 3);
         assert!(info.inputs[0].name.contains("input"));
         assert!(info.outputs.iter().any(|output| output.name.contains(":0")));
+    }
+
+    #[test]
+    fn basic_pitch_runs_one_audio_window() {
+        let model_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("models/nmp.onnx");
+        let samples = vec![0.0_f32; 22_050 * 2];
+        let summary = super::infer_wav(&model_path, &samples).expect("inference should run");
+
+        assert_eq!(summary.audio_samples, 44_100);
+        assert_eq!(summary.windows, 2);
+        assert_eq!(summary.output_frames, 344);
+        assert_eq!(summary.note_shape, "[1, 172, 88]");
+        assert_eq!(summary.onset_shape, "[1, 172, 88]");
+        assert_eq!(summary.contour_shape, "[1, 172, 264]");
     }
 }

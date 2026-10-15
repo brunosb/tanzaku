@@ -327,6 +327,8 @@ window.tanzaku = {
     transcription: {
         modelInfo: () =>
             tauri.core.invoke('transcription_model_info'),
+        inferWav: (path: string) =>
+            tauri.core.invoke('transcription_infer_wav', { path }),
     },
 }
 
