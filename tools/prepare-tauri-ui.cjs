@@ -21,7 +21,13 @@ const html = fs
     )
 fs.writeFileSync(path.join(destination, 'index.html'), html)
 fs.copyFileSync(path.join(compiled, 'app.js'), path.join(destination, 'app.js'))
-fs.copyFileSync(
-    path.join(compiled, 'tauri-bridge.js'),
-    path.join(destination, 'tauri-bridge.js'),
-)
+const bridge = fs
+    .readFileSync(path.join(compiled, 'tauri-bridge.js'), 'utf8')
+    .replace(
+        /^"use strict";\r?\nObject\.defineProperty\(exports, "__esModule", \{ value: true \}\);\r?\n/,
+        '"use strict";\n',
+    )
+if (bridge.includes('Object.defineProperty(exports')) {
+    throw new Error('O bridge Tauri ainda foi gerado como CommonJS.')
+}
+fs.writeFileSync(path.join(destination, 'tauri-bridge.js'), bridge)
