@@ -17,6 +17,7 @@ Player e workspace MIDI para o modo Música Livre de [Where Winds Meet](https://
 - Windows x64.
 - Node.js 18 ou superior.
 - npm.
+- Git LFS, necessário para baixar o `ffmpeg.exe` versionado no repositório.
 - O jogo deve estar instalado e em execução para reproduzir notas nele.
 
 Para importar músicas do YouTube, também são necessários:
@@ -31,10 +32,19 @@ Para importar músicas do YouTube, também são necessários:
 Clone o repositório e instale as dependências:
 
 ```powershell
+git lfs install
 git clone <url-do-repositorio>
 cd tanzaku
 npm install
 ```
+
+O arquivo `src-tauri/bin/ffmpeg.exe` é armazenado usando Git LFS porque ultrapassa o limite de 100 MiB do GitHub. Depois do clone, confirme que o arquivo foi baixado como binário completo:
+
+```powershell
+git lfs pull
+```
+
+Se o Git LFS ainda não estiver instalado, baixe-o em [git-lfs.com](https://git-lfs.com/) e execute `git lfs install` uma vez.
 
 Opcionalmente, configure os recursos de transcrição do YouTube:
 
