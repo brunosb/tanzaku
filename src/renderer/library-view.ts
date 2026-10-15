@@ -9,5 +9,5 @@ export function escapeLibraryText(value: string): string {
                 "'": '&#39;',
                 '"': '&quot;',
             })[character] ?? character,
-    );
+    )
 }

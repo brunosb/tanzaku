@@ -1,4 +1,4 @@
 export type SettingsViewState = {
-    storageRoot: string;
-    overlayVisible: boolean;
-};
+    storageRoot: string
+    overlayVisible: boolean
+}
