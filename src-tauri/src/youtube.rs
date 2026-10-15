@@ -4,7 +4,7 @@ use std::{
     process::Command,
 };
 
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::{storage, transcription};
 
@@ -32,6 +32,32 @@ fn run(command: &str, args: &[&str]) -> Result<std::process::Output, String> {
 
 fn output_text(output: &std::process::Output) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+fn tool_path(app: &AppHandle, name: &str) -> String {
+    let variable = if name == "yt-dlp.exe" {
+        "TANZAKU_YTDLP"
+    } else {
+        "TANZAKU_FFMPEG"
+    };
+    if let Ok(path) = std::env::var(variable) {
+        if Path::new(&path).is_file() {
+            return path;
+        }
+    }
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let path = resource_dir.join("bin").join(name);
+        if path.is_file() {
+            return path.to_string_lossy().into_owned();
+        }
+    }
+    let development_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("bin")
+        .join(name);
+    if development_path.is_file() {
+        return development_path.to_string_lossy().into_owned();
+    }
+    name.to_string()
 }
 
 fn find_downloaded_audio(root: &Path) -> Result<PathBuf, String> {
@@ -63,9 +89,11 @@ pub fn add_youtube(app: &AppHandle, source_url: &str) -> Result<storage::Library
     let root = std::env::temp_dir().join(format!("tanzaku-youtube-{}", std::process::id()));
     fs::create_dir_all(&root).map_err(|error| error.to_string())?;
     let result = (|| {
+        let yt_dlp = tool_path(app, "yt-dlp.exe");
+        let ffmpeg = tool_path(app, "ffmpeg.exe");
         progress(app, "Obtendo informações do vídeo", 0.0);
         let metadata = run(
-            "yt-dlp",
+            &yt_dlp,
             &[
                 "--no-playlist",
                 "--print",
@@ -86,7 +114,7 @@ pub fn add_youtube(app: &AppHandle, source_url: &str) -> Result<storage::Library
         let pattern = root.join("audio.%(ext)s");
         let pattern = pattern.to_string_lossy().into_owned();
         run(
-            "yt-dlp",
+            &yt_dlp,
             &[
                 "--no-playlist",
                 "--no-warnings",
@@ -104,7 +132,7 @@ pub fn add_youtube(app: &AppHandle, source_url: &str) -> Result<storage::Library
         let source_audio = source_audio.to_string_lossy().into_owned();
         let wav_text = wav.to_string_lossy().into_owned();
         run(
-            "ffmpeg",
+            &ffmpeg,
             &[
                 "-y",
                 "-i",

@@ -26,6 +26,11 @@
         "active": true,
         "targets": ["nsis"],
         "icon": ["icons/icon.ico"],
-        "resources": ["models/nmp.onnx", "runtime/onnxruntime.dll"]
+        "resources": [
+            "models/nmp.onnx",
+            "runtime/onnxruntime.dll",
+            "bin/yt-dlp.exe",
+            "bin/ffmpeg.exe"
+        ]
     }
 }
