@@ -2,6 +2,7 @@ mod input;
 mod midi;
 mod planner;
 mod storage;
+mod transcription;
 
 fn new_playlist_id() -> String {
     let value = std::time::SystemTime::now()
@@ -232,6 +233,11 @@ fn runtime_info() -> String {
     "Tanzaku Tauri experimental shell / Rust backend ativo".to_string()
 }
 
+#[tauri::command]
+fn transcription_model_info(app: tauri::AppHandle) -> Result<transcription::ModelInfo, String> {
+    transcription::inspect_for_app(&app)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -251,6 +257,7 @@ pub fn run() {
             playlist_rename,
             playback_load,
             runtime_info,
+            transcription_model_info,
             settings_get,
             storage_choose_directory,
             storage_set_directory

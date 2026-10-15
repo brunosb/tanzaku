@@ -324,8 +324,17 @@ window.tanzaku = {
     storage: {
         chooseDirectory: chooseStorageDirectory,
     },
+    transcription: {
+        modelInfo: () =>
+            tauri.core.invoke('transcription_model_info'),
+    },
 }
 
 void tauri.core.invoke('runtime_info').then((value) => {
     console.info(value)
 })
+
+void tauri.core
+    .invoke('transcription_model_info')
+    .then((value) => console.info('Basic Pitch ONNX carregado:', value))
+    .catch((error) => console.warn('Basic Pitch ONNX indisponível:', error))
