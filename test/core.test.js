@@ -116,6 +116,10 @@ test('renderer representa os três blocos WWM e usa tempo absoluto em pixels', (
     assert.match(rendererSource, /id="youtube-import"/)
     assert.match(rendererSource, /id="playlist-create"/)
     assert.match(rendererSource, /input-modal/)
+    assert.match(rendererSource, /song-options/)
+    assert.match(rendererSource, /playlist-details/)
+    assert.match(rendererSource, /removeTrackFromPlaylist/)
+    assert.match(rendererSource, /rename-midi/)
 })
 
 test('biblioteca renomeia e exclui o MIDI junto com o registro', () => {
@@ -151,6 +155,9 @@ test('playlist persiste, evita músicas duplicadas e permite remover', () => {
     service.addTrack(playlist.id, 'two.mid')
     assert.deepEqual(service.list()[0].trackIds, ['one.mid', 'two.mid'])
     service.removeTrack(playlist.id, 'one.mid')
+    assert.deepEqual(service.list()[0].trackIds, ['two.mid'])
+    service.addTrack(playlist.id, 'one.mid')
+    service.removeTrackFromAll('one.mid')
     assert.deepEqual(service.list()[0].trackIds, ['two.mid'])
     service.rename(playlist.id, 'Treino novo')
     assert.equal(service.list()[0].name, 'Treino novo')

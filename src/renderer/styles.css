@@ -232,16 +232,21 @@ input:focus-visible {
 }
 
 .song-row {
+    position: relative;
     display: flex;
+    min-width: 0;
     align-items: center;
 }
 
 .song {
     display: flex;
-    width: 100%;
+    min-width: 0;
+    width: auto;
+    flex: 1;
     align-items: center;
     gap: 10px;
     padding: 10px;
+    padding-right: 68px;
     border-radius: 6px;
     color: var(--muted);
     background: transparent;
@@ -249,6 +254,8 @@ input:focus-visible {
 }
 
 .song-add {
+    position: absolute;
+    right: 34px;
     width: 28px;
     height: 28px;
     margin-right: 4px;
@@ -256,16 +263,37 @@ input:focus-visible {
     color: var(--subtle);
     background: transparent;
     opacity: 0;
+    cursor: pointer;
+}
+
+.song-options {
+    position: absolute;
+    right: 4px;
+    width: 28px;
+    height: 28px;
+    margin-right: 2px;
+    border-radius: 50%;
+    color: var(--subtle);
+    background: transparent;
+    opacity: 0;
+    cursor: pointer;
 }
 
 .song-row:hover .song-add,
-.song-add:focus-visible {
+.song-add:focus-visible,
+.song-row:hover .song-options,
+.song-options:focus-visible {
     opacity: 1;
 }
 
 .song-add:hover {
     color: var(--yellow);
     background: var(--yellow-soft);
+}
+
+.song-options:hover {
+    color: white;
+    background: var(--surface-3);
 }
 
 .song:hover,
@@ -291,9 +319,12 @@ input:focus-visible {
 
 .song-copy {
     min-width: 0;
+    overflow: hidden;
+    flex: 1;
 }
 
 .song-copy strong {
+    min-width: 0;
     overflow: hidden;
     font-size: 13px;
     font-weight: 600;
@@ -341,6 +372,8 @@ input:focus-visible {
 }
 
 .main-content {
+    display: flex;
+    flex-direction: column;
     min-width: 0;
     min-height: 0;
     overflow: auto;
@@ -393,7 +426,10 @@ h1 {
 }
 
 .roll-card {
-    min-height: 480px;
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
     padding: 20px;
     border: 1px solid var(--line);
     border-radius: 12px;
@@ -403,7 +439,7 @@ h1 {
 
 .roll-toolbar {
     min-width: 0;
-    margin-bottom: 18px;
+    margin-bottom: 10px;
 }
 
 .roll-toolbar > div:first-child {
@@ -445,7 +481,8 @@ h1 {
 }
 
 .roll-scroll {
-    min-height: 390px;
+    min-height: 0;
+    flex: 1;
     overflow: auto;
     border: 1px solid var(--line);
     border-radius: 8px;
@@ -465,7 +502,7 @@ h1 {
     position: sticky;
     left: 0;
     z-index: 4;
-    padding: 8px 12px 5px;
+    padding: 4px 10px 3px;
     color: var(--muted);
     background: #11181a;
     font-size: 11px;
@@ -480,7 +517,7 @@ h1 {
 
 .lane-row {
     display: flex;
-    height: 34px;
+    height: clamp(18px, 2.5vh, 24px);
     border-top: 1px solid rgba(255, 255, 255, 0.045);
 }
 
@@ -489,13 +526,13 @@ h1 {
     left: 0;
     z-index: 3;
     display: grid;
-    width: 48px;
-    min-width: 48px;
+    width: clamp(32px, 4vw, 48px);
+    min-width: clamp(32px, 4vw, 48px);
     place-items: center;
     border-right: 1px solid var(--line);
     color: #f4f7f8;
     background: #172023;
-    font-size: 14px;
+    font-size: clamp(10px, 1.4vw, 14px);
     font-weight: 700;
 }
 
@@ -522,18 +559,18 @@ h1 {
 
 .note {
     position: absolute;
-    top: 5px;
+    top: 2px;
     display: flex;
-    height: 24px;
-    min-width: 28px;
+    height: calc(clamp(18px, 2.5vh, 24px) - 4px);
+    min-width: 22px;
     align-items: center;
     overflow: hidden;
-    padding: 0 7px;
+    padding: 0 5px;
     border-radius: 4px;
     color: #07100a;
     background: #7ab8ff;
     box-shadow: inset 0 -2px rgba(0, 0, 0, 0.15);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     transition:
         filter 120ms,
@@ -641,6 +678,119 @@ h1 {
     border-radius: 6px;
 }
 
+.playlist-details {
+    max-height: 170px;
+    margin: 8px 4px 0;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.025);
+    scrollbar-color: var(--surface-3) transparent;
+}
+
+.playlist-details-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 9px 5px;
+    color: white;
+    font-size: 11px;
+}
+
+.playlist-details-heading strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.playlist-details-heading small {
+    flex: 0 0 auto;
+    color: var(--subtle);
+    font-size: 10px;
+}
+
+.playlist-track {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px 4px 9px;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.playlist-track span {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.playlist-select > span:last-child {
+    min-width: 0;
+    flex: 1;
+}
+
+.playlist-track-remove {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    border-radius: 4px;
+    color: var(--subtle);
+    background: transparent;
+    cursor: pointer;
+}
+
+.playlist-track-remove:hover {
+    color: #ff8c9b;
+    background: var(--surface-3);
+}
+
+.action-menu[hidden] {
+    display: none;
+}
+
+.action-menu {
+    position: fixed;
+    z-index: 30;
+    display: grid;
+    width: 160px;
+    gap: 2px;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #1a2125;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.action-menu strong {
+    overflow: hidden;
+    padding: 4px 7px 6px;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.action-menu button {
+    padding: 7px 8px;
+    border-radius: 4px;
+    color: #e8edef;
+    background: transparent;
+    text-align: left;
+    font-size: 12px;
+}
+
+.action-menu button:hover {
+    background: var(--surface-3);
+}
+
+.action-menu button.danger:hover {
+    color: #ff8c9b;
+}
+
 .playlist-row.active,
 .playlist-row:hover {
     background: var(--surface-2);
@@ -710,7 +860,7 @@ h1 {
 .transport-bar {
     display: flex;
     width: 100%;
-    height: 88px;
+    height: 68px;
     align-items: center;
     gap: 24px;
     padding: 14px 28px;
@@ -823,6 +973,10 @@ h1 {
         padding: 14px;
     }
 
+    .playlist-details {
+        max-height: 130px;
+    }
+
     .legend {
         display: none;
     }
@@ -830,6 +984,38 @@ h1 {
     .transport-bar {
         gap: 12px;
         padding: 12px 16px;
+    }
+}
+
+@media (max-height: 620px) {
+    .sidebar {
+        padding-top: 12px;
+    }
+
+    .brand {
+        margin-bottom: 12px;
+    }
+
+    .main-content {
+        padding-top: 12px;
+        padding-bottom: 12px;
+    }
+
+    .topbar {
+        margin-bottom: 10px;
+    }
+
+    .roll-card {
+        padding: 8px;
+    }
+
+    .roll-toolbar {
+        margin-bottom: 5px;
+    }
+
+    .transport-bar {
+        height: 56px;
+        padding-block: 7px;
     }
 }
 

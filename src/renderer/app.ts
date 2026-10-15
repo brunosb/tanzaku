@@ -46,7 +46,13 @@ let selectedTitle = 'Selecione uma música'
 let playlists: Playlist[] = []
 let selectedPlaylistId = ''
 let repeatEnabled = false
-let inputModalMode: 'playlist' | 'youtube' | null = null
+let inputModalMode:
+    | 'playlist'
+    | 'youtube'
+    | 'rename-playlist'
+    | 'rename-midi'
+    | null = null
+let inputModalTarget = ''
 let youtubeProgress: string | null = null
 let seeking = false
 let seekPreview: number | null = null
@@ -107,6 +113,7 @@ function renderShell(): void {
                 <div id="library" class="library-list"><div class="empty-state">Carregando biblioteca...</div></div>
                 <div class="sidebar-heading playlist-heading"><span>Playlists</span><button class="icon-button" id="playlist-create" title="Criar playlist">＋</button></div>
                 <div id="playlists" class="playlist-list"><div class="empty-state">Nenhuma playlist</div></div>
+                <div id="playlist-details" class="playlist-details"></div>
                 <div class="sidebar-footer"><button class="secondary-button" id="folder">⚙ Armazenamento</button><button class="secondary-button" id="overlay-button">▣ Mostrar overlay</button><span id="folder-name"></span></div>
             </aside>
             <main class="main-content">
@@ -131,6 +138,7 @@ function renderShell(): void {
                 <div class="input-modal-actions"><button class="secondary-button" id="input-modal-cancel">Cancelar</button><button class="primary-button" id="input-modal-submit">Continuar</button></div>
             </div>
         </div>
+        <div class="action-menu" id="action-menu" hidden></div>
         </div>`
 }
 
@@ -188,6 +196,7 @@ function showError(error: unknown): void {
 }
 
 function renderLibrary(entries: any[]): void {
+    ;(window as any).__libraryEntries = entries
     const target = document.querySelector('#library')
     if (!target) return
     if (!entries.length) {
@@ -198,7 +207,7 @@ function renderLibrary(entries: any[]): void {
     target.innerHTML = entries
         .map(
             (entry) =>
-                `<div class="song-row"><button class="song ${entry.id === selectedId ? 'active' : ''}" data-id="${escapeHtml(entry.id)}"><span class="song-icon">♫</span><span class="song-copy"><strong>${escapeHtml(entry.title)}</strong><small>MIDI local</small></span></button><button class="song-add" data-track-id="${escapeHtml(entry.id)}" title="Adicionar à playlist">＋</button></div>`,
+                `<div class="song-row"><button class="song ${entry.id === selectedId ? 'active' : ''}" data-id="${escapeHtml(entry.id)}"><span class="song-icon">♫</span><span class="song-copy"><strong>${escapeHtml(entry.title)}</strong><small>MIDI local</small></span></button><button class="song-add" data-track-id="${escapeHtml(entry.id)}" title="Adicionar à playlist">＋</button><button class="song-options" data-song-action="menu" data-track-id="${escapeHtml(entry.id)}" title="Opções da música">⋯</button></div>`,
         )
         .join('')
     target
@@ -217,6 +226,14 @@ function renderLibrary(entries: any[]): void {
                 () => void addTrackToPlaylist(button.dataset.trackId ?? ''),
             ),
         )
+    target
+        .querySelectorAll<HTMLButtonElement>('.song-options')
+        .forEach((button) =>
+            button.addEventListener('click', (event) => {
+                event.stopPropagation()
+                openSongMenu(button.dataset.trackId ?? '', button)
+            }),
+        )
 }
 
 function renderPlaylists(entries: Playlist[]): void {
@@ -226,6 +243,7 @@ function renderPlaylists(entries: Playlist[]): void {
     if (!entries.length) {
         target.innerHTML =
             '<div class="empty-state compact">Crie uma playlist para organizar suas músicas.</div>'
+        renderPlaylistDetails()
         return
     }
     target.innerHTML = entries
@@ -235,6 +253,7 @@ function renderPlaylists(entries: Playlist[]): void {
                     <button class="playlist-select" data-playlist-id="${escapeHtml(playlist.id)}" title="Selecionar playlist"><span class="playlist-icon">♫</span><span><strong>${escapeHtml(playlist.name)}</strong><small>${playlist.trackIds.length} músicas</small></span></button>
                     <button class="playlist-action" data-playlist-action="play" data-playlist-id="${escapeHtml(playlist.id)}" title="Tocar em ordem">▶</button>
                     <button class="playlist-action" data-playlist-action="shuffle" data-playlist-id="${escapeHtml(playlist.id)}" title="Tocar aleatoriamente">🔀</button>
+                    <button class="playlist-action" data-playlist-action="rename" data-playlist-id="${escapeHtml(playlist.id)}" title="Renomear playlist">✎</button>
                     <button class="playlist-action danger" data-playlist-action="delete" data-playlist-id="${escapeHtml(playlist.id)}" title="Excluir playlist">×</button>
                 </div>`,
         )
@@ -245,6 +264,7 @@ function renderPlaylists(entries: Playlist[]): void {
             button.addEventListener('click', () => {
                 selectedPlaylistId = button.dataset.playlistId ?? ''
                 renderPlaylists(playlists)
+                renderPlaylistDetails()
             }),
         )
     target
@@ -259,6 +279,128 @@ function renderPlaylists(entries: Playlist[]): void {
                     ),
             ),
         )
+    renderPlaylistDetails()
+}
+
+function renderPlaylistDetails(): void {
+    const target = document.querySelector<HTMLElement>('#playlist-details')
+    if (!target) return
+    const playlist = playlists.find((item) => item.id === selectedPlaylistId)
+    if (!playlist) {
+        target.innerHTML = ''
+        return
+    }
+    const libraryEntries = (window as any).__libraryEntries ?? []
+    const tracks = playlist.trackIds
+        .map((id: string) =>
+            libraryEntries.find((entry: any) => entry.id === id),
+        )
+        .filter(Boolean)
+    target.innerHTML = `
+        <div class="playlist-details-heading"><strong>${escapeHtml(playlist.name)}</strong><small>${tracks.length} músicas</small></div>
+        <div class="playlist-track-list">
+            ${tracks.length ? tracks.map((entry: any) => `<div class="playlist-track"><span title="${escapeHtml(entry.title)}">${escapeHtml(entry.title)}</span><button class="playlist-track-remove" data-playlist-id="${escapeHtml(playlist.id)}" data-track-id="${escapeHtml(entry.id)}" title="Remover da playlist">×</button></div>`).join('') : '<div class="empty-state compact">Nenhuma música nesta playlist.<br>Use ＋ na biblioteca para adicionar.</div>'}
+        </div>`
+    target
+        .querySelectorAll<HTMLButtonElement>('.playlist-track-remove')
+        .forEach((button) =>
+            button.addEventListener(
+                'click',
+                () =>
+                    void removeTrackFromPlaylist(
+                        button.dataset.playlistId ?? '',
+                        button.dataset.trackId ?? '',
+                    ),
+            ),
+        )
+}
+
+async function removeTrackFromPlaylist(
+    playlistId: string,
+    trackId: string,
+): Promise<void> {
+    try {
+        const playlist = await window.tanzaku.playlists.removeTrack(
+            playlistId,
+            trackId,
+        )
+        playlists = playlists.map((item) =>
+            item.id === playlist.id ? playlist : item,
+        )
+        renderPlaylists(playlists)
+    } catch (error) {
+        showError(error)
+    }
+}
+
+async function handleLibraryAction(
+    trackId: string,
+    action: string,
+): Promise<void> {
+    if (!trackId) return
+    const entries = (window as any).__libraryEntries ?? []
+    const entry = entries.find((item: any) => item.id === trackId)
+    if (!entry) return
+    if (action === 'delete') {
+        if (!window.confirm(`Excluir “${entry.title}” e o arquivo MIDI?`))
+            return
+        try {
+            await window.tanzaku.library.remove(trackId)
+            if (selectedId === trackId) {
+                selectedId = ''
+                selectedTitle = 'Selecione uma música'
+                currentPlan = null
+                currentState = {
+                    status: 'idle',
+                    position: 0,
+                    duration: 0,
+                    speed: currentState.speed,
+                    currentEventIndex: 0,
+                }
+                const title = document.querySelector('#selected')
+                if (title) title.textContent = selectedTitle
+                renderPlan({ events: [], duration: 0 })
+            }
+            renderLibrary(await window.tanzaku.library.list())
+            renderPlaylists(await window.tanzaku.playlists.list())
+        } catch (error) {
+            showError(error)
+        }
+    }
+}
+
+function closeActionMenu(): void {
+    const menu = document.querySelector<HTMLElement>('#action-menu')
+    if (menu) menu.hidden = true
+}
+
+function openSongMenu(trackId: string, anchor: HTMLElement): void {
+    const entries = (window as any).__libraryEntries ?? []
+    const entry = entries.find((item: any) => item.id === trackId)
+    const menu = document.querySelector<HTMLElement>('#action-menu')
+    if (!entry || !menu) return
+    menu.innerHTML = `
+        <strong>${escapeHtml(entry.title)}</strong>
+        <button data-menu-action="rename">✎ Renomear</button>
+        <button data-menu-action="delete" class="danger">× Excluir</button>`
+    const bounds = anchor.getBoundingClientRect()
+    menu.hidden = false
+    menu.style.left = `${Math.max(8, bounds.right - 160)}px`
+    menu.style.top = `${Math.min(window.innerHeight - 104, bounds.bottom + 4)}px`
+    menu.querySelector('[data-menu-action="rename"]')?.addEventListener(
+        'click',
+        () => {
+            closeActionMenu()
+            openInputModal('rename-midi', trackId)
+        },
+    )
+    menu.querySelector('[data-menu-action="delete"]')?.addEventListener(
+        'click',
+        () => {
+            closeActionMenu()
+            void handleLibraryAction(trackId, 'delete')
+        },
+    )
 }
 
 async function addTrackToPlaylist(trackId: string): Promise<void> {
@@ -294,6 +436,10 @@ async function handlePlaylistAction(
             renderPlaylists(await window.tanzaku.playlists.list())
             return
         }
+        if (action === 'rename') {
+            openInputModal('rename-playlist', playlistId)
+            return
+        }
         selectedPlaylistId = playlistId
         renderPlaylists(playlists)
         await window.tanzaku.playlists.play(
@@ -305,8 +451,12 @@ async function handlePlaylistAction(
     }
 }
 
-function openInputModal(mode: 'playlist' | 'youtube'): void {
+function openInputModal(
+    mode: 'playlist' | 'youtube' | 'rename-playlist' | 'rename-midi',
+    targetId = '',
+): void {
     inputModalMode = mode
+    inputModalTarget = targetId
     const modal = document.querySelector<HTMLElement>('#input-modal')
     const title = document.querySelector('#input-modal-title')
     const description = document.querySelector('#input-modal-description')
@@ -318,18 +468,43 @@ function openInputModal(mode: 'playlist' | 'youtube'): void {
     if (!modal || !title || !description || !input || !submit || !progress)
         return
     title.textContent =
-        mode === 'playlist' ? 'Nova playlist' : 'Adicionar do YouTube'
-    description.textContent =
         mode === 'playlist'
-            ? 'Escolha um nome para a playlist.'
+            ? 'Nova playlist'
+            : mode === 'youtube'
+              ? 'Adicionar do YouTube'
+              : mode === 'rename-playlist'
+                ? 'Renomear playlist'
+                : 'Renomear MIDI'
+    description.textContent =
+        mode === 'playlist' ||
+        mode === 'rename-playlist' ||
+        mode === 'rename-midi'
+            ? 'Informe o novo nome.'
             : 'Cole a URL de um vídeo individual do YouTube.'
     input.placeholder =
-        mode === 'playlist'
+        mode === 'playlist' || mode === 'rename-playlist'
             ? 'Nome da playlist'
-            : 'https://youtube.com/watch?v=...'
-    input.value = ''
+            : mode === 'rename-midi'
+              ? 'Nome do MIDI'
+              : 'https://youtube.com/watch?v=...'
+    const currentName =
+        mode === 'rename-playlist'
+            ? (playlists.find((playlist) => playlist.id === targetId)?.name ??
+              '')
+            : mode === 'rename-midi'
+              ? (((window as any).__libraryEntries ?? []).find(
+                    (entry: any) => entry.id === targetId,
+                )?.title ?? '')
+              : ''
+    input.value = currentName
+    if (currentName) input.select()
     progress.textContent = ''
-    submit.textContent = mode === 'playlist' ? 'Criar' : 'Converter'
+    submit.textContent =
+        mode === 'playlist'
+            ? 'Criar'
+            : mode === 'youtube'
+              ? 'Converter'
+              : 'Salvar'
     submit.disabled = false
     modal.hidden = false
     input.focus()
@@ -337,6 +512,7 @@ function openInputModal(mode: 'playlist' | 'youtube'): void {
 
 function closeInputModal(): void {
     inputModalMode = null
+    inputModalTarget = ''
     youtubeProgress = null
     const modal = document.querySelector<HTMLElement>('#input-modal')
     if (modal) modal.hidden = true
@@ -359,10 +535,24 @@ async function submitInputModal(): Promise<void> {
             const playlist = await window.tanzaku.playlists.create(value)
             selectedPlaylistId = playlist.id
             renderPlaylists(await window.tanzaku.playlists.list())
-        } else {
+        } else if (inputModalMode === 'youtube') {
             const entry = await window.tanzaku.library.addYoutube(value)
             renderLibrary(await window.tanzaku.library.list())
             if (progress) progress.textContent = `Salvo: ${entry.title}`
+        } else if (inputModalMode === 'rename-playlist') {
+            await window.tanzaku.playlists.rename(inputModalTarget, value)
+            renderPlaylists(await window.tanzaku.playlists.list())
+        } else if (inputModalMode === 'rename-midi') {
+            const entry = await window.tanzaku.library.rename(
+                inputModalTarget,
+                value,
+            )
+            renderLibrary(await window.tanzaku.library.list())
+            if (selectedId === entry.id) {
+                selectedTitle = entry.title
+                const title = document.querySelector('#selected')
+                if (title) title.textContent = selectedTitle
+            }
         }
         closeInputModal()
     } catch (error) {
@@ -500,6 +690,10 @@ function requestRender(): void {
 }
 
 function bindControls(): void {
+    document
+        .querySelector('#action-menu')
+        ?.addEventListener('click', (event) => event.stopPropagation())
+    window.addEventListener('click', closeActionMenu)
     document
         .querySelector('#window-minimize')
         ?.addEventListener('click', () => void window.tanzaku.window.minimize())
