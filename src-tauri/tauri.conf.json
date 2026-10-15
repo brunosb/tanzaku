@@ -4,7 +4,7 @@
     "version": "0.1.0",
     "identifier": "com.tanzaku.desktop.experiment",
     "build": {
-        "frontendDist": "ui"
+        "frontendDist": "../dist-tauri"
     },
     "app": {
         "windows": [
@@ -18,7 +18,8 @@
         ],
         "security": {
             "csp": "default-src 'self'; script-src 'self'"
-        }
+        },
+        "withGlobalTauri": true
     },
     "bundle": {
         "active": false,
