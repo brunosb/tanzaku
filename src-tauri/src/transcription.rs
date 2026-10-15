@@ -102,6 +102,7 @@ fn transcribe_wav(
     padded.extend_from_slice(samples);
     let mut note_windows = Vec::new();
     let mut onset_windows = Vec::new();
+    let mut contour_windows = Vec::new();
 
     for start in (0..padded.len()).step_by(HOP) {
         let mut window = vec![0.0_f32; WINDOW];
@@ -130,12 +131,22 @@ fn transcribe_wav(
                 .copied()
                 .collect::<Vec<_>>(),
         );
+        contour_windows.push(
+            outputs["StatefulPartitionedCall:0"]
+                .try_extract_array::<f32>()
+                .map_err(|error| format!("Saída contour inválida: {error}"))?
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
+        );
     }
 
     let note = unwrap_windows(&note_windows, OUTPUT_FRAMES, OUTPUT_COLS, samples.len());
     let onset = unwrap_windows(&onset_windows, OUTPUT_FRAMES, OUTPUT_COLS, samples.len());
+    let contour = unwrap_windows(&contour_windows, OUTPUT_FRAMES, 264, samples.len());
     let frames = note.len() / OUTPUT_COLS;
-    let notes = crate::decoder::decode_notes(&note, &onset, frames);
+    let mut notes = crate::decoder::decode_notes(&note, &onset, frames);
+    crate::decoder::add_pitch_bends(&mut notes, &contour, frames);
     crate::decoder::write_midi(midi_path, &notes)?;
     Ok(MidiTranscriptionSummary {
         audio_samples: samples.len(),

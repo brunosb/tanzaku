@@ -1,5 +1,6 @@
 use midly::{
-    num::u28, Format, Header, MetaMessage, MidiMessage, Smf, Timing, TrackEvent, TrackEventKind,
+    num::u28, Format, Header, MetaMessage, MidiMessage, PitchBend, Smf, Timing, TrackEvent,
+    TrackEventKind,
 };
 use std::path::Path;
 
@@ -16,6 +17,7 @@ pub struct NoteEvent {
     pub end_frame: usize,
     pub pitch: u8,
     pub velocity: u8,
+    pub pitch_bends: Vec<(usize, i16)>,
 }
 
 pub fn decode_notes(note: &[f32], onset: &[f32], frames: usize) -> Vec<NoteEvent> {
@@ -69,6 +71,46 @@ pub fn decode_notes(note: &[f32], onset: &[f32], frames: usize) -> Vec<NoteEvent
 
     result.sort_by_key(|note| (note.start_frame, note.pitch));
     result
+}
+
+pub fn add_pitch_bends(notes: &mut [NoteEvent], contour: &[f32], frames: usize) {
+    for index in 0..notes.len() {
+        let overlaps = notes.iter().enumerate().any(|(other, candidate)| {
+            other != index
+                && candidate.start_frame < notes[index].end_frame
+                && notes[index].start_frame < candidate.end_frame
+        });
+        if overlaps {
+            continue;
+        }
+
+        let note = &mut notes[index];
+        let contour_pitch = contour_bin(note.pitch);
+        let start = note.start_frame.min(frames);
+        let end = note.end_frame.min(frames);
+        for time in start..end {
+            let mut best = f32::MIN;
+            let mut best_offset = 0_i16;
+            for offset in -25_i16..=25 {
+                let bin = contour_pitch + offset as isize;
+                if !(0..264).contains(&bin) {
+                    continue;
+                }
+                let value = contour[time * 264 + bin as usize]
+                    * (-0.5 * (offset as f32 / 5.0).powi(2)).exp();
+                if value > best {
+                    best = value;
+                    best_offset = offset;
+                }
+            }
+            note.pitch_bends.push((time, best_offset));
+        }
+    }
+}
+
+fn contour_bin(midi_pitch: u8) -> isize {
+    let frequency = 440.0 * 2.0_f32.powf((midi_pitch as f32 - 69.0) / 12.0);
+    (36.0 * (frequency / 27.5).log2()).round() as isize
 }
 
 fn infer_onsets(onset: &[f32], frames: &[f32], n_frames: usize) -> Vec<f32> {
@@ -189,22 +231,38 @@ fn make_note(start: usize, end: usize, pitch: usize, energy: f32) -> NoteEvent {
         end_frame: end,
         pitch: (pitch + 21) as u8,
         velocity: (energy.clamp(0.0, 1.0) * 127.0).round() as u8,
+        pitch_bends: Vec::new(),
     }
 }
 
 pub fn write_midi(path: &Path, notes: &[NoteEvent]) -> Result<(), String> {
     let ticks_per_beat = 480_u32;
     let ticks_per_second = 960.0_f32;
-    let mut events = Vec::with_capacity(notes.len() * 2 + 2);
+    let mut events = Vec::with_capacity(notes.len() * 4 + 2);
     events.push((
         0_u32,
+        0_u8,
         TrackEventKind::Meta(MetaMessage::Tempo(500_000.into())),
     ));
     for note in notes {
         let start = ((note.start_frame as f32 / FRAME_RATE) * ticks_per_second).round() as u32;
         let end = ((note.end_frame as f32 / FRAME_RATE) * ticks_per_second).round() as u32;
+        for (frame, bend) in &note.pitch_bends {
+            let time = ((*frame as f32 / FRAME_RATE) * ticks_per_second).round() as u32;
+            events.push((
+                time,
+                0_u8,
+                TrackEventKind::Midi {
+                    channel: 0.into(),
+                    message: MidiMessage::PitchBend {
+                        bend: PitchBend::from_int((*bend as i32 * 4096 / 3) as i16),
+                    },
+                },
+            ));
+        }
         events.push((
             start,
+            1_u8,
             TrackEventKind::Midi {
                 channel: 0.into(),
                 message: MidiMessage::NoteOn {
@@ -215,6 +273,7 @@ pub fn write_midi(path: &Path, notes: &[NoteEvent]) -> Result<(), String> {
         ));
         events.push((
             end.max(start + 1),
+            2_u8,
             TrackEventKind::Midi {
                 channel: 0.into(),
                 message: MidiMessage::NoteOff {
@@ -224,11 +283,11 @@ pub fn write_midi(path: &Path, notes: &[NoteEvent]) -> Result<(), String> {
             },
         ));
     }
-    events.sort_by_key(|event| event.0);
+    events.sort_by_key(|event| (event.0, event.1));
 
     let mut track = Vec::with_capacity(events.len() + 1);
     let mut previous = 0;
-    for (absolute, kind) in events {
+    for (absolute, _, kind) in events {
         track.push(TrackEvent {
             delta: u28::new(absolute.saturating_sub(previous)),
             kind,
