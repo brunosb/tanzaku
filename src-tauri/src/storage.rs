@@ -61,9 +61,15 @@ pub fn storage_root() -> PathBuf {
     }
 
     let default = default_storage_root();
-    pointer_roots()
+    let selected = pointer_roots()
         .iter()
-        .find_map(|pointer| selected_root(pointer))
+        .filter_map(|pointer| selected_root(pointer))
+        .collect::<Vec<_>>();
+    selected
+        .iter()
+        .find(|path| path.join("library.json").is_file())
+        .cloned()
+        .or_else(|| selected.into_iter().next())
         .unwrap_or(default)
 }
 
