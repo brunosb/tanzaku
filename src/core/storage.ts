@@ -20,6 +20,8 @@ export type MigrationReport = {
     importedSettings: boolean
 }
 
+let writeCounter = 0
+
 export function defaultStorageRoot(): string {
     if (process.env.TANZAKU_DATA_DIR)
         return path.resolve(process.env.TANZAKU_DATA_DIR)
@@ -78,9 +80,26 @@ export function readJson<T>(file: string, fallback: T): T {
 
 export function writeJson<T>(file: string, value: T): void {
     fs.mkdirSync(path.dirname(file), { recursive: true })
-    const temporary = `${file}.tmp`
+    const temporary = `${file}.${process.pid}.${Date.now()}.${writeCounter++}.tmp`
     fs.writeFileSync(temporary, `${JSON.stringify(value, null, 4)}\n`, 'utf8')
-    fs.renameSync(temporary, file)
+    try {
+        let lastError: unknown
+        for (let attempt = 0; attempt < 8; attempt++) {
+            try {
+                fs.renameSync(temporary, file)
+                return
+            } catch (error) {
+                lastError = error
+                const code = (error as NodeJS.ErrnoException).code
+                if (!['EBUSY', 'EPERM', 'ENOTEMPTY'].includes(code ?? ''))
+                    throw error
+                Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25)
+            }
+        }
+        throw lastError
+    } finally {
+        if (fs.existsSync(temporary)) fs.unlinkSync(temporary)
+    }
 }
 
 export function readLibrary(layout: StorageLayout): LibraryEntry[] {

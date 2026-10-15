@@ -41,6 +41,21 @@ export class PlaylistService {
         return playlist
     }
 
+    removeTrackFromAll(trackId: string): void {
+        const playlists = this.list()
+        let changed = false
+        for (const playlist of playlists) {
+            const nextTrackIds = playlist.trackIds.filter(
+                (id) => id !== trackId,
+            )
+            if (nextTrackIds.length !== playlist.trackIds.length) {
+                playlist.trackIds = nextTrackIds
+                changed = true
+            }
+        }
+        if (changed) writeJson(this.layout.playlists, playlists)
+    }
+
     rename(playlistId: string, name: string): Playlist {
         const playlists = this.list()
         const playlist = playlists.find((item) => item.id === playlistId)

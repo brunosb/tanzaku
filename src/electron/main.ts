@@ -1,7 +1,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { Midi } from '@tonejs/midi'
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain } from 'electron'
+import {
+    app,
+    BrowserWindow,
+    dialog,
+    globalShortcut,
+    ipcMain,
+    screen,
+} from 'electron'
 import { KeyboardState } from '../core/keyboard-state'
 import { LibraryService } from '../core/library'
 import {
@@ -83,11 +90,14 @@ function rendererFile(): string {
 }
 
 function createWindows(): void {
+    const workArea = screen.getPrimaryDisplay().workAreaSize
+    const width = Math.min(1180, Math.max(900, workArea.width - 80))
+    const height = Math.min(780, Math.max(520, workArea.height - 80))
     controlWindow = new BrowserWindow({
-        width: 1180,
-        height: 780,
-        minWidth: 900,
-        minHeight: 560,
+        width,
+        height,
+        minWidth: 760,
+        minHeight: 460,
         frame: false,
         backgroundColor: '#080b0d',
         webPreferences: {
@@ -334,6 +344,8 @@ function setupIpc(): void {
             if (!queue.ids.length) queue = null
         }
         library.remove(entryId)
+        playlistService.removeTrackFromAll(entryId)
+        if (loadedId === entryId) clearLoadedTrack()
         return library.list()
     })
     ipcMain.handle('library:import', async () => {
