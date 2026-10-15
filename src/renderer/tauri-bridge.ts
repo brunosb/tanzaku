@@ -58,6 +58,12 @@ let playbackEventTimer: ReturnType<typeof setTimeout> | undefined
 let playbackTickTimer: ReturnType<typeof setTimeout> | undefined
 const stateListeners = new Set<(state: PlaybackState) => void>()
 const eventListeners = new Set<(event: unknown, index: number) => void>()
+const countdownListeners = new Set<(value: { remaining: number }) => void>()
+let countdownGeneration = 0
+
+const emitCountdown = (remaining: number) => {
+    for (const listener of countdownListeners) listener({ remaining })
+}
 
 const emitPlaybackState = () => {
     const snapshot = { ...playbackState }
@@ -96,6 +102,12 @@ const schedulePlayback = (generation: number) => {
     ) {
         const index = playbackState.currentEventIndex++
         const event = playbackPlan.events[index]
+        void tauri.core.invoke('keyboard_event', {
+            event: {
+                keys: event.keys,
+                hold_ms: Math.max(0, Math.round(event.hold * 1000)),
+            },
+        })
         for (const listener of eventListeners) listener(event, index)
     }
     const next = playbackPlan.events[playbackState.currentEventIndex]
@@ -120,6 +132,8 @@ const schedulePlaybackTick = (generation: number) => {
 
 const loadPlaybackPlan = (plan: PlaybackPlan) => {
     clearPlaybackTimers()
+    countdownGeneration++
+    emitCountdown(0)
     playbackGeneration++
     playbackPlan = plan
     playbackState.status = 'idle'
@@ -129,9 +143,18 @@ const loadPlaybackPlan = (plan: PlaybackPlan) => {
     emitPlaybackState()
 }
 
-const startPlayback = () => {
+const startPlayback = async () => {
     if (!playbackPlan.events.length || playbackState.status === 'playing')
         return
+    const countdown = ++countdownGeneration
+    for (let remaining = 5; remaining > 0; remaining--) {
+        emitCountdown(remaining)
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        if (countdown !== countdownGeneration) return
+    }
+    emitCountdown(0)
+    const armed = await tauri.core.invoke<boolean>('keyboard_arm')
+    if (!armed) throw new Error('Não foi possível armar a janela do jogo.')
     if (
         playbackState.status === 'ended' ||
         playbackState.status === 'stopped'
@@ -151,25 +174,34 @@ const startPlayback = () => {
 
 const pausePlayback = () => {
     if (playbackState.status !== 'playing') return
+    countdownGeneration++
+    emitCountdown(0)
     playbackState.position = playbackPosition()
     playbackState.status = 'paused'
     clearPlaybackTimers()
     playbackGeneration++
+    void tauri.core.invoke('keyboard_reset')
     emitPlaybackState()
 }
 
 const stopPlayback = () => {
     clearPlaybackTimers()
+    countdownGeneration++
+    emitCountdown(0)
     playbackGeneration++
     playbackState.status = 'stopped'
     playbackState.position = 0
     playbackState.currentEventIndex = 0
+    void tauri.core.invoke('keyboard_reset')
     emitPlaybackState()
 }
 
 const seekPlayback = (position: number) => {
     clearPlaybackTimers()
+    countdownGeneration++
+    emitCountdown(0)
     playbackGeneration++
+    void tauri.core.invoke('keyboard_reset')
     playbackState.position = Math.max(
         0,
         Math.min(playbackState.duration, Number(position) || 0),
@@ -238,7 +270,10 @@ window.tanzaku = {
             return () => eventListeners.delete(listener)
         },
         onPlan: emptyUnsubscribe,
-        onCountdown: emptyUnsubscribe,
+        onCountdown: (listener: (value: { remaining: number }) => void) => {
+            countdownListeners.add(listener)
+            return () => countdownListeners.delete(listener)
+        },
     },
     playlists: {
         list: () => tauri.core.invoke('playlist_list'),

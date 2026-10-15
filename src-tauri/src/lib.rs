@@ -1,3 +1,4 @@
+mod input;
 mod midi;
 mod planner;
 mod storage;
@@ -65,6 +66,21 @@ fn playback_load(id: String) -> Result<planner::PlaybackPlan, String> {
         return Err("O MIDI não possui notas utilizáveis.".to_string());
     }
     Ok(plan)
+}
+
+#[tauri::command]
+fn keyboard_arm() -> bool {
+    input::arm()
+}
+
+#[tauri::command]
+fn keyboard_event(event: input::KeyboardEvent) -> bool {
+    input::event(event)
+}
+
+#[tauri::command]
+fn keyboard_reset() {
+    input::reset();
 }
 
 #[tauri::command]
@@ -199,6 +215,9 @@ pub fn run() {
             library_import,
             library_list,
             library_rename,
+            keyboard_arm,
+            keyboard_event,
+            keyboard_reset,
             playlist_add,
             playlist_create,
             playlist_delete,
