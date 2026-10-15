@@ -23,7 +23,8 @@
         "withGlobalTauri": true
     },
     "bundle": {
-        "active": false,
-        "icon": []
+        "active": true,
+        "targets": ["nsis"],
+        "icon": ["icons/icon.ico"]
     }
 }

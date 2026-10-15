@@ -14,6 +14,7 @@
         "tauri:check": "node tools/run-cargo.cjs check --manifest-path src-tauri/Cargo.toml",
         "tauri:ui": "npm run build:electron && node tools/prepare-tauri-ui.cjs",
         "tauri:run": "npm run tauri:ui && node tools/run-cargo.cjs run --manifest-path src-tauri/Cargo.toml",
+        "tauri:build": "npm run tauri:ui && node tools/run-tauri.cjs build --bundles nsis",
         "format": "biome format --write .",
         "format:check": "biome check .",
         "lint": "biome lint .",
@@ -52,6 +53,7 @@
     },
     "devDependencies": {
         "@biomejs/biome": "^2.5.15",
+        "@tauri-apps/cli": "^2.12.3",
         "@types/node": "^26.6.4",
         "electron": "^44.7.1",
         "electron-builder": "^26.15.3",
