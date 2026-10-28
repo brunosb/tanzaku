@@ -1,10 +1,10 @@
-import './shared/api/tauri-bridge'
-import './shared/styles/theme.css'
-import 'sonner/dist/styles.css'
-import './shared/styles/styles.css'
 import { createRoot } from 'react-dom/client'
+import 'sonner/dist/styles.css'
 import { App } from './app/app'
 import { createRuntime } from './app/runtime'
+import './shared/api/tauri-bridge'
+import './shared/styles/styles.css'
+import './shared/styles/theme.css'
 
 const target = document.getElementById('app')!
 if (window.tanzaku) {

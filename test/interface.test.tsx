@@ -266,7 +266,7 @@ test('storage switch resets views, selection and native snapshot after confirmed
     await screen.findByRole('heading', {
         name: 'Seu próximo acorde começa aqui',
     })
-    expect(h.runtime.views.size).toBe(0)
+    expect(h.runtime.navigation.views.size).toBe(0)
     expect(h.runtime.catalog.get().entries).toEqual([])
     await h.user.click(screen.getByRole('link', { name: 'Biblioteca' }))
     expect(screen.getByRole('searchbox')).toHaveValue('')

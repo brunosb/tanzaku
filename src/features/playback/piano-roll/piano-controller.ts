@@ -1,5 +1,5 @@
-import type { Runtime } from '../../../app/runtime'
-import { formatTime } from '../../catalog/model/catalog-model'
+import { formatTime } from '@/shared/lib/format-time'
+import type { PlaybackContext as Runtime } from '../model/context'
 import { activeIndices, positionAt } from './roll-model'
 
 export const KEY_GROUPS = [

@@ -12,4 +12,3 @@ midi-cache/settings.json
 .plan-cache/
 src-tauri/target/
 src-tauri/gen/
-
