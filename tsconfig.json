@@ -1,3 +1,19 @@
 {
-    "extends": "./tsconfig.renderer.json"
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "ES2022",
+        "moduleResolution": "Bundler",
+        "noEmit": true,
+        "jsx": "react-jsx",
+        "allowImportingTsExtensions": true,
+        "baseUrl": ".",
+        "paths": {
+            "@/*": ["src/*"]
+        },
+        "strict": true,
+        "skipLibCheck": true,
+        "lib": ["ES2022", "DOM", "DOM.Iterable"],
+        "types": ["vite/client"]
+    },
+    "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

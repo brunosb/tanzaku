@@ -8,7 +8,7 @@ import {
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test } from 'vitest'
-import { App } from '../src/renderer/app'
+import { App } from '../src/app/app'
 import { harness } from './helpers'
 
 const disposers: (() => void)[] = []

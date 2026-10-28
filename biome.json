@@ -1,6 +1,10 @@
 {
     "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
-    "css": { "parser": { "tailwindDirectives": true } },
+    "css": {
+        "parser": {
+            "tailwindDirectives": true
+        }
+    },
     "formatter": {
         "enabled": true,
         "indentStyle": "space",
@@ -32,12 +36,10 @@
             "!node_modules/**",
             "!.venv/**",
             "!dist/**",
-            "!dist-tauri/**",
             "!src-tauri/target/**",
             "!src-tauri/gen/**",
             "!midi-cache/**/*.mid",
-            "!midi-cache/.plan-cache/**",
-            "!dist-renderer/**"
+            "!midi-cache/.plan-cache/**"
         ]
     }
 }

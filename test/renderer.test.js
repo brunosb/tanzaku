@@ -3,9 +3,9 @@ import { webcrypto } from 'node:crypto'
 import { test } from 'vitest'
 
 if (!globalThis.crypto) globalThis.crypto = webcrypto
-const bridgeModule = import('../src/renderer/tauri-bridge.ts')
-const apiModule = import('../src/renderer/api.ts')
-const rollModule = import('../src/renderer/roll-model.ts')
+const bridgeModule = import('../src/shared/api/tauri-bridge.ts')
+const apiModule = import('../src/shared/api/contracts.ts')
+const rollModule = import('../src/features/playback/piano-roll/roll-model.ts')
 async function setup() {
     const { createBridge } = await bridgeModule
     const { initialState } = await apiModule

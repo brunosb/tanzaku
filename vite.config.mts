@@ -4,13 +4,13 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-    root: 'src/renderer',
+    root: 'src',
     base: './',
     plugins: [react(), tailwindcss()],
     resolve: {
         alias: {
-            '@': fileURLToPath(new URL('./src/renderer', import.meta.url)),
+            '@': fileURLToPath(new URL('./src', import.meta.url)),
         },
     },
-    build: { outDir: '../../dist-tauri', emptyOutDir: true, target: 'es2022' },
+    build: { outDir: '../dist', emptyOutDir: true, target: 'es2022' },
 })

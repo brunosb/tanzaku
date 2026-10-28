@@ -12,7 +12,7 @@
         "dev": "npm run tauri:run",
         "build": "npm run build:ui",
         "build:ui": "npm run typecheck && vite build",
-        "typecheck": "tsc -p tsconfig.renderer.json",
+        "typecheck": "tsc -p tsconfig.json",
         "tauri:ui": "npm run build:ui",
         "tauri:check": "node tools/run-cargo.cjs check --manifest-path src-tauri/Cargo.toml",
         "tauri:run": "npm run build:ui && node tools/run-cargo.cjs run --manifest-path src-tauri/Cargo.toml",
