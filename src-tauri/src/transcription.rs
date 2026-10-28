@@ -1,12 +1,38 @@
-use ort::{session::Session, value::ValueType};
+use ort::{environment::Environment, session::Session, value::ValueType};
 use serde::Serialize;
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::OnceLock,
+};
 use tauri::Manager;
 
 use crate::audio;
 
 const MODEL_RESOURCE_PATH: &str = "models/nmp.onnx";
 const RUNTIME_RESOURCE_PATH: &str = "runtime/onnxruntime.dll";
+
+static ONNX_ENVIRONMENT: OnceLock<Result<Environment, String>> = OnceLock::new();
+
+fn environment_for_model(model_path: &Path) -> Result<Environment, String> {
+    ONNX_ENVIRONMENT
+        .get_or_init(|| {
+            let runtime_path = model_path
+                .parent()
+                .and_then(Path::parent)
+                .map(|root| root.join(RUNTIME_RESOURCE_PATH));
+            match runtime_path.filter(|runtime| runtime.is_file()) {
+                Some(runtime) => ort::init_from(runtime)
+                    .map_err(|error| format!("Falha ao carregar ONNX Runtime nativo: {error}"))?
+                    .with_name("tanzaku-basic-pitch")
+                    .build(),
+                None => ort::init().with_name("tanzaku-basic-pitch").build(),
+            }
+            .map_err(|error| format!("Falha ao iniciar ONNX Runtime: {error}"))
+        })
+        .as_ref()
+        .map(Clone::clone)
+        .map_err(Clone::clone)
+}
 
 #[derive(Debug, Serialize)]
 pub struct TensorInfo {
@@ -81,18 +107,7 @@ fn transcribe_wav(
     const OUTPUT_FRAMES: usize = 172;
     const OUTPUT_COLS: usize = 88;
 
-    let runtime_path = model_path
-        .parent()
-        .and_then(Path::parent)
-        .map(|root| root.join(RUNTIME_RESOURCE_PATH));
-    let environment = match runtime_path.filter(|runtime| runtime.is_file()) {
-        Some(runtime) => ort::init_from(runtime)
-            .map_err(|error| format!("Falha ao carregar ONNX Runtime nativo: {error}"))?
-            .with_name("tanzaku-basic-pitch")
-            .build(),
-        None => ort::init().with_name("tanzaku-basic-pitch").build(),
-    }
-    .map_err(|error| format!("Falha ao iniciar ONNX Runtime: {error}"))?;
+    let environment = environment_for_model(model_path)?;
     let mut session = Session::builder(&environment)
         .map_err(|error| format!("Falha ao criar sessão ONNX: {error}"))?
         .commit_from_file(model_path)
@@ -184,18 +199,7 @@ fn infer_wav(model_path: &Path, samples: &[f32]) -> Result<InferenceSummary, Str
     const OVERLAP_SAMPLES: usize = OVERLAP_FRAMES * FFT_HOP;
     const HOP: usize = WINDOW - OVERLAP_SAMPLES;
 
-    let runtime_path = model_path
-        .parent()
-        .and_then(Path::parent)
-        .map(|root| root.join(RUNTIME_RESOURCE_PATH));
-    let environment = match runtime_path.filter(|runtime| runtime.is_file()) {
-        Some(runtime) => ort::init_from(runtime)
-            .map_err(|error| format!("Falha ao carregar ONNX Runtime nativo: {error}"))?
-            .with_name("tanzaku-basic-pitch")
-            .build(),
-        None => ort::init().with_name("tanzaku-basic-pitch").build(),
-    }
-    .map_err(|error| format!("Falha ao iniciar ONNX Runtime: {error}"))?;
+    let environment = environment_for_model(model_path)?;
     let mut session = Session::builder(&environment)
         .map_err(|error| format!("Falha ao criar sessão ONNX: {error}"))?
         .commit_from_file(model_path)
@@ -281,18 +285,7 @@ fn inspect_model(path: &Path) -> Result<ModelInfo, String> {
         .map_err(|error| format!("Não foi possível ler o modelo: {error}"))?
         .len();
 
-    let runtime_path = path
-        .parent()
-        .and_then(Path::parent)
-        .map(|root| root.join(RUNTIME_RESOURCE_PATH));
-    let environment = match runtime_path.filter(|runtime| runtime.is_file()) {
-        Some(runtime) => ort::init_from(runtime)
-            .map_err(|error| format!("Falha ao carregar ONNX Runtime nativo: {error}"))?
-            .with_name("tanzaku-basic-pitch")
-            .build(),
-        None => ort::init().with_name("tanzaku-basic-pitch").build(),
-    }
-    .map_err(|error| format!("Falha ao iniciar ONNX Runtime: {error}"))?;
+    let environment = environment_for_model(path)?;
     let session = Session::builder(&environment)
         .map_err(|error| format!("Falha ao criar sessão ONNX: {error}"))?
         .commit_from_file(path)
@@ -348,6 +341,27 @@ mod tests {
         assert_eq!(summary.note_shape, "[1, 172, 88]");
         assert_eq!(summary.onset_shape, "[1, 172, 88]");
         assert_eq!(summary.contour_shape, "[1, 172, 264]");
+    }
+
+    #[test]
+    fn shared_environment_supports_inspection_inference_and_transcription() {
+        let model_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("models/nmp.onnx");
+        let inspection = super::inspect_model(&model_path).expect("model inspection should run");
+        assert_eq!(inspection.outputs.len(), 3);
+
+        let samples = vec![0.0_f32; 22_050 * 2];
+        let inference = super::infer_wav(&model_path, &samples).expect("inference should run");
+        assert_eq!(inference.windows, 2);
+
+        let midi_path = std::env::temp_dir().join(format!(
+            "tanzaku-onnx-shared-environment-{}.mid",
+            std::process::id()
+        ));
+        let transcription = super::transcribe_wav(&model_path, &samples, &midi_path)
+            .expect("transcription should run");
+        assert!(transcription.frames > 0);
+        assert!(midi_path.is_file());
+        let _ = std::fs::remove_file(midi_path);
     }
 
     #[test]
