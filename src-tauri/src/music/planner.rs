@@ -1,0 +1,221 @@
+use super::types::{Key, MidiNote, PlaybackEvent, PlaybackPlan};
+use std::collections::BTreeMap;
+const ROWS: [&str; 3] = ["ZXCVBNM", "ASDFGHJ", "QWERTYU"];
+
+pub fn map_pitch(pitch: i32, low_pitch: i32, high_pitch: i32) -> Option<Key> {
+    if pitch < low_pitch || pitch > high_pitch {
+        return None;
+    }
+    let offset = pitch - low_pitch;
+    let octave = (offset / 12) as usize;
+    let pitch_class = offset % 12;
+    let natural_index = match pitch_class {
+        0 => Some(0),
+        2 => Some(1),
+        4 => Some(2),
+        5 => Some(3),
+        7 => Some(4),
+        9 => Some(5),
+        11 => Some(6),
+        _ => None,
+    };
+    if let Some(index) = natural_index {
+        let name = ROWS.get(octave)?.chars().nth(index)?.to_string();
+        return Some(Key {
+            name: name.clone(),
+            modifier: None,
+            label: name,
+        });
+    }
+
+    let accidental = match pitch_class {
+        1 => Some((0, "shift")),
+        3 => Some((2, "ctrl")),
+        6 => Some((3, "shift")),
+        8 => Some((4, "shift")),
+        10 => Some((6, "ctrl")),
+        _ => None,
+    }?;
+    let name = ROWS.get(octave)?.chars().nth(accidental.0)?.to_string();
+    Some(Key {
+        name: name.clone(),
+        modifier: Some(accidental.1.to_string()),
+        label: format!(
+            "{}{}",
+            if accidental.1 == "shift" {
+                "⇧"
+            } else {
+                "⌃"
+            },
+            name
+        ),
+    })
+}
+
+fn choose_notes(notes: &[MidiNote], max_poly: usize) -> Vec<MidiNote> {
+    let mut unique = BTreeMap::new();
+    for note in notes {
+        unique.insert(note.pitch, note.clone());
+    }
+    let mut values = unique.into_values().collect::<Vec<_>>();
+    values.sort_by_key(|note| note.pitch);
+    if values.len() <= max_poly {
+        return values;
+    }
+    if max_poly <= 1 {
+        return values.into_iter().rev().take(1).collect();
+    }
+    let first = values.first().cloned().expect("notes are not empty");
+    let last = values.last().cloned().expect("notes are not empty");
+    let mut remaining = values[1..values.len() - 1].to_vec();
+    remaining.sort_by(|left, right| right.velocity.total_cmp(&left.velocity));
+    let mut selected = vec![first, last];
+    selected.extend(remaining.into_iter().take(max_poly - 2));
+    selected.sort_by_key(|note| note.pitch);
+    selected
+}
+
+pub fn build_playback_plan(input: &[MidiNote]) -> PlaybackPlan {
+    let mut stats = BTreeMap::new();
+    if input.is_empty() {
+        for key in ["notes", "groups", "chords", "rolled", "shifted", "dropped"] {
+            stats.insert(key.to_string(), 0.0);
+        }
+        return PlaybackPlan {
+            events: Vec::new(),
+            duration: 0.0,
+            stats,
+        };
+    }
+
+    let mut mapped = Vec::new();
+    let mut dropped = 0;
+    for note in input {
+        if let Some(key) = map_pitch(note.pitch, 48, 83) {
+            mapped.push((note.clone(), key));
+        } else {
+            dropped += 1;
+        }
+    }
+    mapped.sort_by(|left, right| {
+        left.0
+            .time
+            .total_cmp(&right.0.time)
+            .then(left.0.pitch.cmp(&right.0.pitch))
+    });
+
+    let mut groups: Vec<Vec<(MidiNote, Key)>> = Vec::new();
+    for note in mapped {
+        if let Some(current) = groups.last_mut() {
+            if (note.0.time - current[0].0.time) * 1000.0 <= 20.0 {
+                current.push(note);
+                continue;
+            }
+        }
+        groups.push(vec![note]);
+    }
+
+    let mut events = Vec::new();
+    let mut chords = 0;
+    let mut rolled = 0;
+    for group in &groups {
+        let notes = group.iter().map(|item| item.0.clone()).collect::<Vec<_>>();
+        let selected = choose_notes(&notes, 6);
+        if selected.len() > 1 {
+            chords += 1;
+        }
+        for (index, note) in selected.iter().enumerate() {
+            let key = group
+                .iter()
+                .find(|item| item.0.pitch == note.pitch)
+                .map(|item| item.1.clone())
+                .expect("selected note must have a mapped key");
+            let time = group[0].0.time
+                + if selected.len() > 1 {
+                    index as f64 * 0.005
+                } else {
+                    0.0
+                };
+            if selected.len() > 1 {
+                rolled += 1;
+            }
+            events.push(PlaybackEvent {
+                time,
+                keys: vec![key],
+                hold: 0.03_f64.max(note.duration),
+            });
+        }
+        dropped += group.len() as i32 - selected.len() as i32;
+    }
+    events.sort_by(|left, right| left.time.total_cmp(&right.time));
+    let duration = events
+        .iter()
+        .map(|event| event.time + event.hold)
+        .fold(0.0_f64, f64::max);
+    stats.insert("notes".to_string(), input.len() as f64);
+    stats.insert("groups".to_string(), groups.len() as f64);
+    stats.insert("chords".to_string(), chords as f64);
+    stats.insert("rolled".to_string(), rolled as f64);
+    stats.insert("shift".to_string(), 0.0);
+    stats.insert("dropped".to_string(), dropped.max(0) as f64);
+    PlaybackPlan {
+        events,
+        duration,
+        stats,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn note(time: f64, pitch: i32, duration: f64) -> MidiNote {
+        MidiNote {
+            time,
+            pitch,
+            velocity: 0.8,
+            duration,
+        }
+    }
+    #[test]
+    fn duration_covers_earlier_sustain() {
+        let p = build_playback_plan(&[note(0.0, 48, 10.0), note(1.0, 52, 0.1)]);
+        assert_eq!(p.duration, 10.0);
+    }
+    #[test]
+    fn all_36_pitches_and_actual_accidentals() {
+        for p in 48..=83 {
+            assert!(map_pitch(p, 48, 83).is_some());
+        }
+        assert!(map_pitch(47, 48, 83).is_none());
+        assert_eq!(
+            map_pitch(49, 48, 83).unwrap().modifier.as_deref(),
+            Some("shift")
+        );
+        assert_eq!(map_pitch(51, 48, 83).unwrap().name, "C");
+        assert_eq!(
+            map_pitch(51, 48, 83).unwrap().modifier.as_deref(),
+            Some("ctrl")
+        );
+    }
+    #[test]
+    fn chords_roll_by_five_ms_and_limit_selection() {
+        let notes = (48..=55).map(|p| note(0.0, p, 0.2)).collect::<Vec<_>>();
+        let p = build_playback_plan(&notes);
+        assert_eq!(p.events.len(), 6);
+        for (i, e) in p.events.iter().enumerate() {
+            assert!((e.time - i as f64 * 0.005).abs() < 1e-9);
+        }
+        assert_eq!(p.stats["dropped"], 2.0);
+    }
+    #[test]
+    fn separated_notes_keep_attacks_and_out_of_range_is_discarded() {
+        let p = build_playback_plan(&[
+            note(0.0, 48, 0.1),
+            note(0.025, 52, 0.1),
+            note(0.050, 84, 0.1),
+        ]);
+        assert_eq!(p.events.len(), 2);
+        assert_eq!(p.events[1].time, 0.025);
+        assert_eq!(p.stats["dropped"], 1.0);
+    }
+}

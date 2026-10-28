@@ -1,7 +1,9 @@
-# 04 — Armazenamento e biblioteca
+# Armazenamento e biblioteca
 
-O padrão é `app.getPath('userData')` com `midi/`, `plans/`, `library.json` e `settings.json`. Uma pasta escolhida pelo usuário usa a mesma estrutura. O CLI e o Electron usam o mesmo módulo de storage.
+Os JSONs e a pasta `midi` permanecem no formato anterior. IDs existentes são preservados, inclusive ao renomear. Novos IDs são independentes do nome do arquivo.
 
-Criar diretórios automaticamente, validar nomes, impedir traversal, renomear arquivo e registro juntos, excluir MIDI e registro juntos e manter planos derivados fora do Git. Nunca usar o diretório de instalação como armazenamento permanente.
+Uma transação global serializa a leitura/modificação/gravação dos índices e a troca da raiz. Arquivo ausente permite biblioteca nova; JSON inválido ou ilegível retorna erro e impede sobrescrita silenciosa. Gravação usa NamedTempFile no mesmo diretório, sync e persistência atômica.
 
-Na primeira execução, detectar `midi-cache/` legado, oferecer cópia segura para o novo local, preservar a origem e manter títulos e URLs. Não apagar dados antigos automaticamente.
+Importações validam o MIDI antes de adicionar o registro. Renomeação reverte o arquivo se a gravação do índice falhar. Exclusão valida biblioteca e playlists, move o MIDI para um nome temporário e atualiza ambos os índices; em falha, tenta restaurar índices e arquivo.
+
+Excluir uma faixa carregada ou trocar a raiz também descarrega o backend. A troca de raiz cancela a conversão ativa. Configurações do Rust são a autoridade da pasta escolhida; localStorage do WebView não substitui essa seleção.

@@ -10,4 +10,5 @@ midi-cache/library.json
 midi-cache/settings.json
 *.mid
 .plan-cache/
-dist-electron/
+src-tauri/target/
+src-tauri/gen/

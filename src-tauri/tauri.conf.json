@@ -1,0 +1,37 @@
+{
+    "$schema": "https://schema.tauri.app/config/2",
+    "productName": "Tanzaku",
+    "version": "0.1.0",
+    "identifier": "com.tanzaku.desktop.experiment",
+    "build": {
+        "frontendDist": "../dist",
+        "beforeBuildCommand": "npm run build:ui"
+    },
+    "app": {
+        "windows": [
+            {
+                "label": "main",
+                "title": "Tanzaku",
+                "width": 900,
+                "height": 920,
+                "resizable": true,
+                "decorations": false
+            }
+        ],
+        "security": {
+            "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+        },
+        "withGlobalTauri": true
+    },
+    "bundle": {
+        "active": true,
+        "targets": ["nsis"],
+        "icon": ["icons/icon.ico"],
+        "resources": [
+            "models/nmp.onnx",
+            "runtime/onnxruntime.dll",
+            "bin/yt-dlp.exe",
+            "bin/ffmpeg.exe"
+        ]
+    }
+}
