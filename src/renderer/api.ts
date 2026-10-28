@@ -97,6 +97,8 @@ export type TanzakuApi = {
         rename(id: string, name: string): Promise<Playlist>
         remove(id: string): Promise<Playlist[]>
         add(playlistId: string, trackId: string): Promise<Playlist>
+        addMany(playlistId: string, trackIds: string[]): Promise<Playlist>
+        reorder(playlistId: string, trackIds: string[]): Promise<Playlist>
         removeTrack(playlistId: string, trackId: string): Promise<Playlist>
         play(id: string, mode: 'order' | 'shuffle'): Promise<void>
     }

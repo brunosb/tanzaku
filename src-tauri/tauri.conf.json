@@ -19,7 +19,7 @@
             }
         ],
         "security": {
-            "csp": "default-src 'self'; script-src 'self'"
+            "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
         },
         "withGlobalTauri": true
     },

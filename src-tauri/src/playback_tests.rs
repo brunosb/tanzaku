@@ -226,3 +226,39 @@ fn pausing_pending_transition_does_not_skip_next_track_on_resume() {
     h.wait(|n| matches!(n,Notice::Plan(s)if s.track.as_ref().is_some_and(|t|t.id=="b")));
     assert_eq!(*seen.lock().unwrap(), ["b", "b"]);
 }
+
+#[test]
+fn playlist_edits_apply_only_to_the_next_execution() {
+    let saved = Arc::new(Mutex::new(vec![
+        "a".to_string(),
+        "b".to_string(),
+        "c".to_string(),
+    ]));
+    let source = saved.clone();
+    let h = Harness::new(Arc::new(move |spec| match spec {
+        LoadSpec::Playlist(_, _) => {
+            let ids = source.lock().unwrap().clone();
+            let mut p = prepared(&ids[0], 0.0, 0.2);
+            p.queue = Some(Queue {
+                ids,
+                index: 0,
+                shuffle: false,
+            });
+            Ok(p)
+        }
+        LoadSpec::Track(id) => Ok(prepared(&id, 0.0, 10.0)),
+    }));
+    h.controller
+        .request(Action::Playlist("p".into(), false))
+        .unwrap();
+    h.wait(|n| matches!(n,Notice::Plan(s)if s.track.as_ref().is_some_and(|t|t.id=="a")));
+    *saved.lock().unwrap() = vec!["c".into(), "a".into(), "b".into()];
+    h.wait(|n| matches!(n,Notice::Plan(s)if s.track.as_ref().is_some_and(|t|t.id=="b")));
+    h.controller.request(Action::Stop).unwrap();
+    h.controller
+        .request(Action::Playlist("p".into(), false))
+        .unwrap();
+    h.wait(|n| matches!(n,Notice::Plan(s)if s.track.as_ref().is_some_and(|t|t.id=="c")));
+    let next = h.controller.request(Action::Snapshot).unwrap();
+    assert_eq!(next.track.unwrap().id, "c");
+}

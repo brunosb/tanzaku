@@ -1,10 +1,10 @@
 # Tanzaku
 
-Aplicativo Windows x64 para criar, organizar e tocar MIDIs no modo Música Livre de Where Winds Meet. O backend é Rust/Tauri; a interface é TypeScript, HTML e CSS. Node é utilizado somente no desenvolvimento e no build.
+Aplicativo Windows x64 para criar, organizar e tocar MIDIs no modo Música Livre de Where Winds Meet. O backend é Rust/Tauri; a interface usa React, TypeScript e shadcn/ui, com Vite e Tailwind CSS. Node é utilizado somente no desenvolvimento e no build.
 
 ## Desenvolvimento
 
-Requisitos: Windows x64, Git LFS, Node.js 18+, npm, Rust via rustup e as ferramentas C++ do Visual Studio exigidas pelo Tauri. A versão Rust está fixada em `rust-toolchain.toml`.
+Requisitos: Windows x64, Git LFS, Node.js 22.12+, npm, Rust via rustup e as ferramentas C++ do Visual Studio exigidas pelo Tauri. A versão Rust está fixada em `rust-toolchain.toml`.
 
 ```powershell
 git lfs install
@@ -29,7 +29,17 @@ A velocidade altera ataques e durações. Em 2x, uma nota de um segundo dura mei
 
 O mapa mantém as alturas 48–83 e utiliza teclas naturais, SHIFT e CTRL. O planner agrupa ataques em até 20 ms, seleciona até seis notas por grupo e distribui acordes em passos de 5 ms no tempo musical. Notas fora da faixa e notas removidas pela seleção são contabilizadas no plano.
 
-## YouTube e MIDI
+## Biblioteca e playlists
+
+O menu lateral separa Tocador, Biblioteca e Playlists. Clicar no nome de uma música carrega o plano e abre o piano roll; Reproduzir inicia a contagem. A barra inferior permanece disponível em todas as páginas.
+
+A biblioteca permite buscar sem distinguir acentos ou maiúsculas, filtrar origem e participação em playlists e ordenar por nome ou inclusão. Ctrl+F foca a busca da página. A seleção por checkbox é independente do carregamento; o checkbox do cabeçalho seleciona a página atual, com 50 músicas, e a seleção permanece entre páginas.
+
+Uma playlist possui página própria para adicionar várias músicas, remover referências e reorganizar por Mover acima, Mover abaixo ou Mover para posição. A reordenação exige a ordem original e busca vazia. Alterações são salvas imediatamente e valem para a próxima execução; a fila em andamento permanece intacta. Remover da playlist preserva o MIDI; excluir da biblioteca remove o arquivo e seus vínculos, após confirmação.
+
+Busca, seleção e rolagem são preservadas durante a sessão. Nenhuma duração ou data ausente é inventada. A interface, os ícones e os estilos são empacotados localmente.
+
+## Conversão do YouTube
 
 O instalador inclui yt-dlp, FFmpeg, Basic Pitch ONNX e ONNX Runtime. O aplicativo não utiliza Python nem procura essas dependências globais para funcionar. A aquisição exige conexão com o YouTube.
 
@@ -50,7 +60,8 @@ Erros em JSON são apresentados sem substituir o arquivo por uma lista vazia. Gr
 | `npm start` / `npm run tauri:run` | Compilar a interface e executar o Tauri |
 | `npm run build` | Compilar e preparar o renderer |
 | `npm run tauri:check` | Verificar o backend Rust |
-| `npm test` | Biome, build, testes do renderer e testes Rust |
+| `npm test` | Biome, TypeScript, Vitest e testes Rust |
+| `npm run typecheck` | Verificar os tipos sem gerar arquivos |
 | `npm run test:renderer` | Testar contratos e estado visual |
 | `npm run test:rust` | Testar planner, teclado, transporte, armazenamento e transcrição |
 | `npm run tauri:build` / `npm run dist` | Gerar o instalador NSIS |
@@ -60,7 +71,7 @@ O instalador é produzido em `src-tauri/target/release/bundle/nsis`. O Windows p
 ## Estrutura
 
 - `src-tauri/src/`: backend, MIDI, transcrição, armazenamento e entrada Windows.
-- `src/renderer/`: interface, contrato tipado e bridge IPC.
+- `src/renderer/`: páginas React, componentes shadcn, controlador visual, contrato tipado e bridge IPC.
 - `test/`: regressões do renderer e fixtures geradas pelo Basic Pitch 0.4.0.
 - `tools/`: ferramentas de build e geração opcional de fixtures.
 - `specs/`: arquitetura e critérios de validação.
@@ -75,4 +86,4 @@ npm run test:desktop -- "D:\Filmes e Series\partituras\midi\DBZ Makafushigi.mid"
 
 As fixtures de referência não exigem Python para executar os testes. Sua regeneração é uma tarefa de desenvolvimento separada, com Basic Pitch 0.4.0, usando `tools/generate-reference-fixtures.py`.
 
-A validação com jogo real e as medições de latência/FPS são distintas dos testes automatizados; consulte `specs/10-tauri-validation.md`.
+A validação com jogo real e as medições de latência/FPS são distintas dos testes automatizados; consulte `specs/10-tauri-validation.md` e `specs/11-navigation-and-library.md`.

@@ -292,6 +292,30 @@ async fn playlist_remove_track(
 }
 
 #[tauri::command]
+async fn playlist_add_tracks(
+    playlist_id: String,
+    track_ids: Vec<String>,
+) -> Result<storage::Playlist, String> {
+    blocking(move || {
+        let _guard = storage::transaction()?;
+        storage::add_playlist_tracks(&playlist_id, &track_ids)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn playlist_reorder(
+    playlist_id: String,
+    track_ids: Vec<String>,
+) -> Result<storage::Playlist, String> {
+    blocking(move || {
+        let _guard = storage::transaction()?;
+        storage::reorder_playlist(&playlist_id, &track_ids)
+    })
+    .await
+}
+
+#[tauri::command]
 
 async fn playlist_play(
     id: String,
@@ -524,6 +548,8 @@ pub fn run() {
             playlist_delete,
             playlist_add,
             playlist_remove_track,
+            playlist_add_tracks,
+            playlist_reorder,
             playlist_play,
             storage_choose_directory,
             storage_set_directory,

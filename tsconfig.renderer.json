@@ -3,12 +3,15 @@
         "target": "ES2022",
         "module": "ES2022",
         "moduleResolution": "Bundler",
-        "outDir": "dist-renderer",
-        "rootDir": "src/renderer",
+        "noEmit": true,
+        "jsx": "react-jsx",
+        "allowImportingTsExtensions": true,
+        "baseUrl": ".",
+        "paths": { "@/*": ["src/renderer/*"] },
         "strict": true,
         "skipLibCheck": true,
         "lib": ["ES2022", "DOM", "DOM.Iterable"],
-        "types": []
+        "types": ["vite/client"]
     },
-    "include": ["src/renderer/**/*.ts"]
+    "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx"]
 }

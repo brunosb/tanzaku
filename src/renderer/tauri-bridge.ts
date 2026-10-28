@@ -191,6 +191,10 @@ export function createBridge(tauri: TauriGlobal): TanzakuApi {
             remove: (id) => invoke('playlist_delete', { id }),
             add: (playlistId, trackId) =>
                 invoke('playlist_add', { playlistId, trackId }),
+            addMany: (playlistId, trackIds) =>
+                invoke('playlist_add_tracks', { playlistId, trackIds }),
+            reorder: (playlistId, trackIds) =>
+                invoke('playlist_reorder', { playlistId, trackIds }),
             removeTrack: (playlistId, trackId) =>
                 invoke('playlist_remove_track', { playlistId, trackId }),
             play: (id, mode) => invoke('playlist_play', { id, mode }),

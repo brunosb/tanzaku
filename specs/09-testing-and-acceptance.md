@@ -8,4 +8,6 @@ A transcrição possui fixtures controladas do Basic Pitch 0.4.0, verificação 
 
 JavaScript cobre argumentos IPC, inicialização/listeners, gerações e sequências, fila exclusivamente nativa, cancelamento por jobId, destaques simultâneos e interpolação do cursor.
 
+Vitest e Testing Library cobrem navegação, busca normalizada, paginação, seleção múltipla, edição de playlists, erros e foco de diálogos. O smoke desktop percorre as páginas no WebView2 real com 10 mil músicas em diretório temporário, valida IPC de adição em lote/reordenação e mede dez segundos de apresentação simulada, sem iniciar o teclado nativo.
+
 A validação manual deve medir DBZ Makafushigi com jogo em foco, incluindo primeiros dez segundos, silêncio, acordes, mudança de velocidade e perda de foco. Meta de despacho: P95 até 10 ms e máximo até 30 ms. Medir FPS e tarefas longas com piano roll visível, além de testar URL individual até importação. Esses resultados devem ser registrados separadamente dos testes automatizados.

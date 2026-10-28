@@ -10,4 +10,5 @@ A implementação de produção é Rust/Tauri com renderer TypeScript. A bibliot
 - 08: empacotamento Windows.
 - 09: testes e aceitação.
 - 10: evidências de validação e verificações manuais restantes.
+- 11: navegação React/shadcn, organização da biblioteca e validação.
 - `tauri-youtube-migration.md`: pipeline nativo e referência Basic Pitch.

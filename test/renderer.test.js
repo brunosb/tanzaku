@@ -1,10 +1,11 @@
-const test = require('node:test')
-const assert = require('node:assert/strict')
-const { webcrypto } = require('node:crypto')
+import assert from 'node:assert/strict'
+import { webcrypto } from 'node:crypto'
+import { test } from 'vitest'
+
 if (!globalThis.crypto) globalThis.crypto = webcrypto
-const bridgeModule = import('../dist-renderer/tauri-bridge.js')
-const apiModule = import('../dist-renderer/api.js')
-const rollModule = import('../dist-renderer/roll-model.js')
+const bridgeModule = import('../src/renderer/tauri-bridge.ts')
+const apiModule = import('../src/renderer/api.ts')
+const rollModule = import('../src/renderer/roll-model.ts')
 async function setup() {
     const { createBridge } = await bridgeModule
     const { initialState } = await apiModule

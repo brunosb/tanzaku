@@ -1,0 +1,74 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: #211801;
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--foreground);
+    --color-destructive: #ff7373;
+    --color-border: var(--border);
+    --color-input: var(--border);
+    --color-ring: var(--primary);
+    --color-sidebar: #0d1113;
+    --color-sidebar-foreground: var(--foreground);
+    --color-sidebar-primary: var(--primary);
+    --color-sidebar-primary-foreground: #211801;
+    --color-sidebar-accent: var(--accent);
+    --color-sidebar-accent-foreground: var(--foreground);
+    --color-sidebar-border: var(--border);
+    --color-sidebar-ring: var(--primary);
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 10px;
+    --radius-xl: 12px;
+}
+
+:root {
+    color-scheme: dark;
+    --background: #080b0d;
+    --foreground: #f5f7f8;
+    --card: #12171a;
+    --popover: #1a2125;
+    --popover-foreground: #f5f7f8;
+    --primary: #f5c451;
+    --secondary: #1a2125;
+    --muted: #1a2125;
+    --muted-foreground: #9ba6ab;
+    --accent: #242c30;
+    --border: rgba(255, 255, 255, 0.08);
+    --radius: 0.625rem;
+    --sidebar: #0d1113;
+    --sidebar-foreground: #f5f7f8;
+    --sidebar-primary: #f5c451;
+    --sidebar-primary-foreground: #211801;
+    --sidebar-accent: #242c30;
+    --sidebar-accent-foreground: #f5f7f8;
+    --sidebar-border: rgba(255, 255, 255, 0.08);
+    --sidebar-ring: #f5c451;
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+    button:not(:disabled),
+    [role="menuitem"]:not([data-disabled]) {
+        cursor: pointer;
+    }
+}

@@ -316,6 +316,12 @@ async function main() {
             )
         }
         await evaluate("window.tanzaku.playback.load('b')")
+        const navigation = await require('./smoke-navigation.cjs')({
+            evaluate,
+            send,
+            data,
+            artifacts,
+        })
         await evaluate(
             'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
         )
@@ -355,16 +361,25 @@ async function main() {
                 for(const i of active)if(plan.events[i].time+plan.events[i].hold<=position)active.delete(i);
                 if(now-lastEmit>=33){lastEmit=now;void window.__TAURI__.event.emit('playback-state',{...initial,status:'playing',speed:1,position,currentEventIndex:index,activeEventIndices:[...active],sequence:++sequence});}
                 times.push(now);
-                if(now-start<2500)requestAnimationFrame(frame);else resolve();
+                if(now-start<10000)requestAnimationFrame(frame);else resolve();
             };requestAnimationFrame(frame)});
             await window.__TAURI__.event.emit('playback-state',{...initial,status:'paused',activeEventIndices:[],sequence:++sequence});
             observer?.disconnect();
             return {kind:'simulated transport in actual WebView2',visibility:document.visibilityState,frames:times.length,fps:(times.length-1)*1000/(times.at(-1)-times[0]),longTasks:tasks.length,longestTaskMs:Math.max(0,...tasks)};
         })()`)
+        assert(
+            presentation.fps >= 60,
+            `Presentation fell below 60 FPS: ${presentation.fps}`,
+        )
+        assert(
+            presentation.longTasks <= 1,
+            `Recurring long tasks: ${presentation.longTasks}`,
+        )
         assert.deepEqual(errors, [])
         const result = {
             checks: 'real WebView2 + Tauri IPC + ONNX passed',
             presentation,
+            navigation,
             youtube: youtubeResult,
             events: plan.events.length,
             transcribedNotes: summary.notes,

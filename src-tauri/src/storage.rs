@@ -147,6 +147,55 @@ pub fn read_playlists() -> Result<Vec<Playlist>, String> {
 pub fn write_playlists(playlists: &[Playlist]) -> Result<(), String> {
     save_json(&storage_root()?.join("playlists.json"), playlists)
 }
+
+// The caller holds transaction() for the complete read/validate/write operation.
+pub fn add_playlist_tracks(playlist_id: &str, track_ids: &[String]) -> Result<Playlist, String> {
+    let library = read_library()?;
+    let available = library
+        .iter()
+        .map(|e| e.id.as_str())
+        .collect::<std::collections::HashSet<_>>();
+    if track_ids.iter().any(|id| !available.contains(id.as_str())) {
+        return Err("Música não encontrada. Nenhuma alteração foi salva.".into());
+    }
+    let mut lists = read_playlists()?;
+    let playlist = lists
+        .iter_mut()
+        .find(|p| p.id == playlist_id)
+        .ok_or("Playlist não encontrada.")?;
+    let mut present = playlist
+        .track_ids
+        .iter()
+        .cloned()
+        .collect::<std::collections::HashSet<_>>();
+    for id in track_ids {
+        if present.insert(id.clone()) {
+            playlist.track_ids.push(id.clone());
+        }
+    }
+    let result = playlist.clone();
+    write_playlists(&lists)?;
+    Ok(result)
+}
+
+pub fn reorder_playlist(playlist_id: &str, track_ids: &[String]) -> Result<Playlist, String> {
+    let mut lists = read_playlists()?;
+    let playlist = lists
+        .iter_mut()
+        .find(|p| p.id == playlist_id)
+        .ok_or("Playlist não encontrada.")?;
+    let mut before = playlist.track_ids.clone();
+    let mut after = track_ids.to_vec();
+    before.sort();
+    after.sort();
+    if before != after {
+        return Err("A ordem deve conter exatamente as músicas atuais da playlist. Atualize a lista e tente novamente.".into());
+    }
+    playlist.track_ids = track_ids.to_vec();
+    let result = playlist.clone();
+    write_playlists(&lists)?;
+    Ok(result)
+}
 pub fn read_settings() -> Result<serde_json::Value, String> {
     let mut settings: serde_json::Value = read_json(storage_root()?.join("settings.json"))?;
     if settings.is_null() {
@@ -439,6 +488,44 @@ mod tests {
                 .trim(),
             "[]"
         );
+    }
+    #[test]
+    fn playlist_bulk_add_is_atomic_and_reorder_preserves_all_references() {
+        let scope = Scope::new();
+        let a = import_midi(&scope.midi()).unwrap();
+        let b = import_midi(&scope.midi()).unwrap();
+        write_playlists(&[Playlist {
+            id: "p".into(),
+            name: "P".into(),
+            track_ids: vec!["missing".into(), a.id.clone()],
+            created_at: "".into(),
+        }])
+        .unwrap();
+        let file = scope.dir.path().join("playlists.json");
+        let before = fs::read(&file).unwrap();
+        assert!(add_playlist_tracks("p", &[b.id.clone(), "invalid".into()]).is_err());
+        assert_eq!(fs::read(&file).unwrap(), before);
+        let added = add_playlist_tracks("p", &[a.id.clone(), b.id.clone(), b.id.clone()]).unwrap();
+        assert_eq!(
+            added.track_ids,
+            vec!["missing".to_string(), a.id.clone(), b.id.clone()]
+        );
+        let before = fs::read(&file).unwrap();
+        for invalid in [
+            vec![a.id.clone(), b.id.clone()],
+            vec!["missing".into(), a.id.clone(), a.id.clone()],
+            vec!["missing".into(), a.id.clone(), b.id.clone(), "extra".into()],
+        ] {
+            assert!(reorder_playlist("p", &invalid).is_err());
+            assert_eq!(fs::read(&file).unwrap(), before);
+        }
+        let order = vec![b.id, "missing".into(), a.id];
+        reorder_playlist("p", &order).unwrap();
+        assert_eq!(read_playlists().unwrap()[0].track_ids, order);
+        fs::write(&file, b"{broken").unwrap();
+        assert!(add_playlist_tracks("p", &[]).is_err());
+        assert!(reorder_playlist("p", &[]).is_err());
+        assert_eq!(fs::read(&file).unwrap(), b"{broken");
     }
     #[test]
     fn deletion_cleans_file_and_playlist_and_invalid_index_preserves_data() {
