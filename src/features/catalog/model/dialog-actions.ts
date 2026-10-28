@@ -1,4 +1,4 @@
-import { type CatalogContext as Runtime } from '@/features/catalog/model/context'
+import { type CatalogContext } from '@/features/catalog/model/context'
 import { type LibraryEntry, type Playlist } from '@/shared/api/contracts'
 export type CatalogDialogAction =
     | { kind: 'new-playlist' }
@@ -11,7 +11,7 @@ export type CatalogDialogAction =
     | { kind: 'remove-tracks'; playlist: Playlist; trackIds: string[] }
     | { kind: 'move'; playlist: Playlist; index: number }
 export type CatalogProps = {
-    runtime: Runtime
+    runtime: CatalogContext
     open: (
         action: CatalogDialogAction | { kind: 'youtube' | 'storage' },
     ) => void

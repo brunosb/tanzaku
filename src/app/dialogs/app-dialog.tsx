@@ -19,6 +19,19 @@ export function AppDialog({
     if (action.kind === 'youtube')
         return <YoutubeDialog runtime={runtime} close={close} />
     if (action.kind === 'storage')
-        return <StorageDialog runtime={runtime} close={close} />
+        return (
+            <StorageDialog
+                chooseDirectory={() =>
+                    runtime.catalog.mutate(() =>
+                        runtime.api.storage.chooseDirectory(),
+                    )
+                }
+                onChanged={() => {
+                    runtime.navigation.resetViews()
+                    runtime.navigate('/player')
+                }}
+                close={close}
+            />
+        )
     return <CatalogDialog runtime={runtime} action={action} close={close} />
 }

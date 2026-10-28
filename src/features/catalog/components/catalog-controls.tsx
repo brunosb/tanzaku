@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Music2, Search } from 'lucide-react'
-import { type CatalogContext as Runtime } from '@/features/catalog/model/context'
+import { type CatalogContext } from '@/features/catalog/model/context'
 import { useCatalog } from '@/features/catalog/model/hooks'
 import { run } from '@/shared/lib/report-error'
 import { Button } from '@/shared/ui/button'
@@ -135,7 +135,7 @@ export function Empty({
         </div>
     )
 }
-export function CatalogError({ runtime }: { runtime: Runtime }) {
+export function CatalogError({ runtime }: { runtime: CatalogContext }) {
     const catalog = useCatalog(runtime)
     return catalog.error ? (
         <div className="error-banner" role="alert">

@@ -6,8 +6,8 @@ import {
     moveTrack,
     normalize,
     paginate,
-} from '../src/features/catalog/model/catalog-model'
-import { harness } from './helpers'
+} from '../../src/features/catalog/model/catalog-model'
+import { harness } from '../support/helpers'
 
 test('search normalizes accents and case; filters compose with stable inclusion order', () => {
     const entries = [

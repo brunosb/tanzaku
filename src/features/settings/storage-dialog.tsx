@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import type { CatalogContext } from '@/features/catalog/model/context'
 import { AlertDialogCancel } from '@/shared/ui/alert-dialog'
 import { Button } from '@/shared/ui/button'
 import { EditorDialog } from '@/shared/ui/editor-dialog'
 export function StorageDialog({
-    runtime,
+    chooseDirectory,
+    onChanged,
     close,
 }: {
-    runtime: CatalogContext
+    chooseDirectory: () => Promise<string | null>
+    onChanged: () => void
     close: () => void
 }) {
     const [pending, setPending] = useState(false),
@@ -27,13 +28,8 @@ export function StorageDialog({
         setPending(true)
         setError('')
         try {
-            const directory = await runtime.catalog.mutate(() =>
-                runtime.api.storage.chooseDirectory(),
-            )
-            if (directory) {
-                runtime.navigation.resetViews()
-                runtime.navigate('/player')
-            }
+            const directory = await chooseDirectory()
+            if (directory) onChanged()
             if (alive.current) close()
         } catch (e) {
             if (alive.current) setError(String(e))

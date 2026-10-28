@@ -8,7 +8,7 @@ const cargo =
         : 'cargo'
 
 const child = spawn(cargo, process.argv.slice(2), {
-    cwd: path.resolve(__dirname, '..'),
+    cwd: path.resolve(__dirname, '../..'),
     env: process.env,
     stdio: 'inherit',
     windowsHide: true,

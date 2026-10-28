@@ -3,10 +3,14 @@ import {
     defaultView,
     type LibraryView,
 } from '@/features/catalog/model/catalog-model'
-import { type CatalogContext as Runtime } from '@/features/catalog/model/context'
-export const useCatalog = (runtime: Runtime) =>
+import { type CatalogContext } from '@/features/catalog/model/context'
+export const useCatalog = (runtime: CatalogContext) =>
     useSyncExternalStore(runtime.catalog.subscribe, runtime.catalog.get)
-export function useView(runtime: Runtime, key: string, original = false) {
+export function useView(
+    runtime: CatalogContext,
+    key: string,
+    original = false,
+) {
     const [view, setView] = useState(
         () =>
             runtime.navigation.views.get(key) ?? {

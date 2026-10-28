@@ -5,7 +5,7 @@ const os = require('node:os')
 const net = require('node:net')
 const assert = require('node:assert/strict')
 const { spawn } = require('node:child_process')
-const root = path.resolve(__dirname, '..')
+const root = path.resolve(__dirname, '../..')
 const data = fs.mkdtempSync(path.join(os.tmpdir(), 'tanzaku-smoke-'))
 const artifacts = path.join(root, 'src-tauri', 'target', 'smoke')
 fs.mkdirSync(path.join(data, 'midi'))
@@ -107,7 +107,7 @@ async function main() {
     const args = process.argv[3]
         ? []
         : [
-              path.join(root, 'tools', 'run-cargo.cjs'),
+              path.join(root, 'tools', 'build', 'run-cargo.cjs'),
               'run',
               '--manifest-path',
               path.join(root, 'src-tauri', 'Cargo.toml'),

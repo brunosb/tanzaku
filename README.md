@@ -70,20 +70,26 @@ O instalador é produzido em `src-tauri/target/release/bundle/nsis`. O Windows p
 
 ## Estrutura
 
-- `src-tauri/src/`: backend, MIDI, transcrição, armazenamento e entrada Windows.
-- `src/renderer/`: páginas React, componentes shadcn, controlador visual, contrato tipado e bridge IPC.
-- `test/`: regressões do renderer e fixtures geradas pelo Basic Pitch 0.4.0.
-- `tools/`: ferramentas de build e geração opcional de fixtures.
+- `src/app/`: composição, layout, navegação e coordenação de diálogos.
+- `src/features/`: catálogo, reprodução e configurações, com seus próprios modelos e componentes.
+- `src/shared/`: contrato IPC, bridge Tauri, componentes shadcn e estilos.
+- `src-tauri/src/`: comandos e módulos Rust de música, biblioteca, reprodução, transcrição, YouTube e plataforma.
+- `test/renderer/`, `test/support/` e `test/fixtures/`: regressões, auxiliares e referência Basic Pitch.
+- `tools/`: ferramentas de build, smoke, verificação de arquitetura e geração de fixtures.
 - `specs/`: arquitetura e critérios de validação.
+- `dist/`: saída da interface gerada pelo Vite, ignorada pelo Git.
 
 A verificação desktop opcional usa Node 22+ e uma pasta temporária isolada, sem enviar teclas:
 
 ```powershell
 npm run test:desktop
 # Opcional: usar um MIDI local como entrada do piano roll
-npm run test:desktop -- "D:\Filmes e Series\partituras\midi\DBZ Makafushigi.mid"
+npm run build:ui
+node tools/smoke/smoke-tauri.cjs "D:\Filmes e Series\partituras\midi\DBZ Makafushigi.mid"
 ```
 
-As fixtures de referência não exigem Python para executar os testes. Sua regeneração é uma tarefa de desenvolvimento separada, com Basic Pitch 0.4.0, usando `tools/generate-reference-fixtures.py`.
+As fixtures de referência não exigem Python para executar os testes. Sua regeneração é uma tarefa de desenvolvimento separada, com Basic Pitch 0.4.0, usando `tools/fixtures/generate-reference-fixtures.py`.
 
 A validação com jogo real e as medições de latência/FPS são distintas dos testes automatizados; consulte `specs/10-tauri-validation.md` e `specs/11-navigation-and-library.md`.
+
+A organização por módulos, as regras de dependência e o roteiro para novas funcionalidades estão em [specs/12-project-organization.md](specs/12-project-organization.md). `npm run check:architecture` verifica imports, ciclos e acesso ao Tauri.

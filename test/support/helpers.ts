@@ -1,12 +1,12 @@
-import { createRuntime } from '../src/app/runtime'
+import { createRuntime } from '../../src/app/runtime'
 import {
     initialState,
     type LibraryEntry,
     type Playlist,
     type Snapshot,
     type TauriGlobal,
-} from '../src/shared/api/contracts'
-import { createBridge } from '../src/shared/api/tauri-bridge'
+} from '../../src/shared/api/contracts'
+import { createBridge } from '../../src/shared/api/tauri-bridge'
 
 export function harness(size = 65) {
     let entries: LibraryEntry[] = Array.from({ length: size }, (_, i) => ({

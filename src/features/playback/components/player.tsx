@@ -1,7 +1,7 @@
 import { Library, Music2, Upload } from 'lucide-react'
 import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { Status } from '@/features/playback/components/status'
-import { type PlaybackContext as Runtime } from '@/features/playback/model/context'
+import { type PlaybackContext } from '@/features/playback/model/context'
 import {
     KEY_GROUPS,
     mountPiano,
@@ -12,7 +12,7 @@ export function Player({
     runtime,
     importMidi,
 }: {
-    runtime: Runtime
+    runtime: PlaybackContext
     importMidi: () => void
 }) {
     const meta = useSyncExternalStore(

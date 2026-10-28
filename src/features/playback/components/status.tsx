@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
-import { type PlaybackContext as Runtime } from '@/features/playback/model/context'
+import { type PlaybackContext } from '@/features/playback/model/context'
 import { Badge } from '@/shared/ui/badge'
-export function statusLabel(runtime: Runtime) {
+export function statusLabel(runtime: PlaybackContext) {
     const s = runtime.playback.get()
     if (s.error) return s.error
     if (s.status === 'countdown') return `Começa em ${s.countdownRemaining}s`
@@ -20,7 +20,7 @@ export function statusLabel(runtime: Runtime) {
         )[s.status] ?? s.status
     )
 }
-export function Status({ runtime }: { runtime: Runtime }) {
+export function Status({ runtime }: { runtime: PlaybackContext }) {
     useSyncExternalStore(runtime.playback.subscribe, runtime.playback.get)
     return (
         <Badge variant="outline" id="status" className="status-pill">

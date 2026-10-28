@@ -22,7 +22,7 @@ Node 22+ é necessário somente para o cliente CDP opcional:
 ```powershell
 npm run test:desktop -- "caminho\musica.mid"
 # Validar o release, com PATH restrito no subprocesso:
-node tools/smoke-tauri.cjs "caminho\musica.mid" "src-tauri/target/release/tanzaku-tauri-experiment.exe"
+node tools/smoke/smoke-tauri.cjs "caminho\musica.mid" "src-tauri/target/release/tanzaku-tauri-experiment.exe"
 # Incluir uma URL real na verificação isolada:
 $env:TANZAKU_SMOKE_YOUTUBE_URL = 'https://www.youtube.com/watch?v=9RhCwutqxiA'
 ```
@@ -41,3 +41,5 @@ Por solicitação do usuário, nenhuma reprodução foi executada no Where Winds
 `window.tanzaku.playback.onEvent((event,index,timing)=>...)` recebe `lateByMs` e `sendMs` medidos no worker após SendInput. Atraso de entrega ao WebView não altera essa medição. O disparo ocorre no próprio worker de transporte, sem uma fila/timer de notas no renderer. Logs também informam duração do planejamento e resumo P95/máximo ao terminar a reprodução.
 
 A média de FPS do smoke e os testes com dispositivo simulado não comprovam latência final ou ausência de perdas no jogo.
+
+A reorganização modular posterior, incluindo comparação de FPS no ambiente atual, está documentada em [12-project-organization.md](12-project-organization.md).

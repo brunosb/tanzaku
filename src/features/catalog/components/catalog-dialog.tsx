@@ -8,7 +8,7 @@ import { Button } from '@/shared/ui/button'
 import { EditorDialog } from '@/shared/ui/editor-dialog'
 import { Input } from '@/shared/ui/input'
 import { moveTrack, normalize, paginate } from '../model/catalog-model'
-import type { CatalogContext as Runtime } from '../model/context'
+import type { CatalogContext } from '../model/context'
 import { SelectionPanels } from '../playlists/selection-panels'
 
 export function CatalogDialog({
@@ -18,7 +18,7 @@ export function CatalogDialog({
 }: {
     action: CatalogDialogAction
     close: () => void
-    runtime: Runtime
+    runtime: CatalogContext
 }) {
     const catalog = useCatalog(runtime)
     const [value, setValue] = useState(

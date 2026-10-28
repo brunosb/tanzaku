@@ -20,7 +20,7 @@ for case in cases:
     result = output_to_notes_polyphonic(note,onset,0.5,0.3,11,True,None,None)
     times = model_frames_to_time(case["frames"])
     case["expected"] = [{"start":int(a),"end":int(b),"pitch":int(p),"velocity":int(np.round(v*127)),"startTick":int(np.round(times[a]*960)),"endTick":int(np.round(times[b]*960))} for a,b,p,v in sorted(result)]
-out=Path(__file__).resolve().parents[1]/"test"/"fixtures"/"basic-pitch-0.4.0.json"
+out=Path(__file__).resolve().parents[2]/"test"/"fixtures"/"basic-pitch-0.4.0.json"
 out.parent.mkdir(parents=True,exist_ok=True)
 out.write_text(json.dumps({"reference":"basic-pitch 0.4.0","cases":cases},indent=2)+"\n",encoding="utf-8")
 print(out)

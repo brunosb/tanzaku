@@ -1,7 +1,7 @@
 import { Music2, Pause, Play, Repeat2, Square } from 'lucide-react'
 import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { statusLabel } from '@/features/playback/components/status'
-import { type PlaybackContext as Runtime } from '@/features/playback/model/context'
+import { type PlaybackContext } from '@/features/playback/model/context'
 import { positionAt } from '@/features/playback/piano-roll/roll-model'
 import { formatTime } from '@/shared/lib/format-time'
 import { run } from '@/shared/lib/report-error'
@@ -30,7 +30,7 @@ export function Control({
         </Tooltip>
     )
 }
-export function Transport({ runtime }: { runtime: Runtime }) {
+export function Transport({ runtime }: { runtime: PlaybackContext }) {
     const state = useSyncExternalStore(
         runtime.playback.subscribe,
         runtime.playback.get,

@@ -26,7 +26,7 @@ Eventos periódicos de reprodução ficam em um armazenamento separado. O piano 
 
 Adição valida todos os IDs antes de gravar e acrescenta apenas os ausentes, na ordem recebida. Reordenação exige uma permutação exata, incluindo referências indisponíveis e sua multiplicidade. Ambos usam o mutex e a gravação atômica existentes e não comunicam ações ao transporte. Nenhuma migração dos JSON existentes é necessária.
 
-`npm run build:ui` verifica tipos e gera diretamente `dist-tauri` com caminhos relativos. Os scripts de compilação e cópia antigos foram retirados. Node 22.12+ é ferramenta de desenvolvimento; o aplicativo distribuído continua independente de Node/Python.
+`npm run build:ui` verifica tipos e gera diretamente `dist` com caminhos relativos. Os scripts de compilação e cópia antigos foram retirados. Node 22.12+ é ferramenta de desenvolvimento; o aplicativo distribuído continua independente de Node/Python.
 
 ## Validação
 

@@ -1,5 +1,5 @@
 import { formatTime } from '@/shared/lib/format-time'
-import type { PlaybackContext as Runtime } from '../model/context'
+import type { PlaybackContext } from '../model/context'
 import { activeIndices, positionAt } from './roll-model'
 
 export const KEY_GROUPS = [
@@ -10,7 +10,7 @@ export const KEY_GROUPS = [
 
 // React owns the container. This controller exclusively owns the notes and
 // frame-level updates; native playback remains the only musical clock.
-export function mountPiano(root: HTMLElement, runtime: Runtime) {
+export function mountPiano(root: HTMLElement, runtime: PlaybackContext) {
     let notes: HTMLElement[][] = [],
         previousIndex = 0,
         version = -1

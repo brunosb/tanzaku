@@ -12,7 +12,7 @@ import {
 import { useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { selectPage } from '@/features/catalog/components/catalog-controls'
-import { type CatalogContext as Runtime } from '@/features/catalog/model/context'
+import { type CatalogContext } from '@/features/catalog/model/context'
 import { type CatalogProps } from '@/features/catalog/model/dialog-actions'
 import { useCatalog } from '@/features/catalog/model/hooks'
 import { type LibraryEntry, type Playlist } from '@/shared/api/contracts'
@@ -51,7 +51,7 @@ export function Tracks({
     playlist,
     canReorder = false,
 }: {
-    runtime: Runtime
+    runtime: CatalogContext
     rows: Row[]
     selected: string[]
     onSelection: (ids: string[]) => void

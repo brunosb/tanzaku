@@ -11,4 +11,5 @@ A implementação de produção é Rust/Tauri com renderer TypeScript. A bibliot
 - 09: testes e aceitação.
 - 10: evidências de validação e verificações manuais restantes.
 - 11: navegação React/shadcn, organização da biblioteca e validação.
+- 12: organização modular, regras de dependência e guia para expansão.
 - `tauri-youtube-migration.md`: pipeline nativo e referência Basic Pitch.
