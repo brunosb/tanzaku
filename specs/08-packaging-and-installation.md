@@ -1,5 +1,7 @@
-# 08 — Empacotamento
+# Empacotamento Windows
 
-Usar electron-builder para Windows. Comandos: `npm run build`, `npm run build:electron` e `npm run dist`. O instalador inclui somente runtime, código compilado e dependências de produção; não inclui `.venv`, MIDI de desenvolvimento ou dependências opcionais de transcrição.
+`npm run tauri:build` prepara o renderer por beforeBuildCommand e gera NSIS. O bundle contém modelo ONNX, onnxruntime.dll, yt-dlp.exe e ffmpeg.exe. O aplicativo instalado não depende de Node, Python, Rust ou FFmpeg global.
 
-Criar dados no primeiro uso, permitir escolher a pasta da biblioteca e manter CLI para diagnóstico. A interface Electron e o modo terminal são entradas distintas.
+A ferramenta de build exige Git LFS para FFmpeg e valida o binário Windows x64 antes de copiar recursos. O identificador Tauri existente é mantido para compatibilidade com instalações desta branch; o nome exibido é Tanzaku.
+
+Validar o executável/instalador com pasta de dados isolada e os recursos empacotados. O instalador utiliza a configuração padrão de instalação do WebView2 do Tauri. Não distribuir pastas de build intermediário, biblioteca pessoal ou ambiente Python.

@@ -1,34 +1,152 @@
 use crate::planner::Key;
+use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct KeyboardEvent {
-    pub keys: Vec<Key>,
-    pub hold_ms: u64,
-    pub generation: u64,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Stroke {
+    pub scan: u16,
+    pub up: bool,
 }
-
+pub trait Device: Send {
+    fn arm(&mut self) -> Result<(), String>;
+    fn focused(&self) -> bool;
+    fn send(&mut self, events: &[Stroke]) -> Result<(), String>;
+    fn disarm(&mut self);
+    fn shortcuts(&self) -> (bool, bool) {
+        (false, false)
+    }
+}
+struct Held {
+    index: usize,
+    end: f64,
+}
+// The native playback worker owns both musical deadlines and this state. Key-up
+// therefore follows speed changes without a second timer or a per-note thread.
+pub struct Keyboard<D: Device> {
+    pub device: D,
+    held: BTreeMap<u16, Held>,
+    modifier: Option<u16>,
+}
+impl<D: Device> Keyboard<D> {
+    pub fn new(device: D) -> Self {
+        Self {
+            device,
+            held: BTreeMap::new(),
+            modifier: None,
+        }
+    }
+    pub fn active(&self) -> Vec<usize> {
+        let mut v = self.held.values().map(|h| h.index).collect::<Vec<_>>();
+        v.sort_unstable();
+        v.dedup();
+        v
+    }
+    pub fn press(&mut self, index: usize, keys: &[Key], end: f64) -> Result<(), String> {
+        if !self.device.focused() {
+            return Err("A janela-alvo perdeu o foco.".to_string());
+        }
+        for key in keys {
+            let scan =
+                scan_code(&key.name).ok_or_else(|| format!("Tecla inválida: {}", key.name))?;
+            let modifier = match key.modifier.as_deref() {
+                Some("shift") => Some(0x2a),
+                Some("ctrl") => Some(0x1d),
+                _ => None,
+            };
+            if self.modifier != modifier {
+                if let Some(scan) = self.modifier {
+                    self.device.send(&[Stroke { scan, up: true }])?;
+                    self.modifier = None;
+                }
+                if let Some(scan) = modifier {
+                    self.device.send(&[Stroke { scan, up: false }])?;
+                    self.modifier = modifier;
+                }
+            }
+            if self.held.contains_key(&scan) {
+                self.device.send(&[Stroke { scan, up: true }])?;
+                self.held.remove(&scan);
+            }
+            self.device.send(&[Stroke { scan, up: false }])?;
+            self.held.insert(scan, Held { index, end });
+        }
+        Ok(())
+    }
+    pub fn expire(&mut self, position: f64) -> Result<(), String> {
+        let scans = self
+            .held
+            .iter()
+            .filter_map(|(&scan, h)| (h.end <= position + 0.000001).then_some(scan))
+            .collect::<Vec<_>>();
+        if !scans.is_empty() {
+            self.device.send(
+                &scans
+                    .iter()
+                    .map(|&scan| Stroke { scan, up: true })
+                    .collect::<Vec<_>>(),
+            )?;
+            for scan in scans {
+                self.held.remove(&scan);
+            }
+        }
+        if self.held.is_empty() {
+            if let Some(scan) = self.modifier {
+                self.device.send(&[Stroke { scan, up: true }])?;
+                self.modifier = None;
+            }
+        }
+        Ok(())
+    }
+    pub fn reset(&mut self, disarm: bool) -> Result<(), String> {
+        let events = self
+            .held
+            .keys()
+            .copied()
+            .chain([0x2a, 0x1d])
+            .map(|scan| Stroke { scan, up: true })
+            .collect::<Vec<_>>();
+        self.device.send(&events)?;
+        self.held.clear();
+        self.modifier = None;
+        if disarm {
+            self.device.disarm();
+        }
+        Ok(())
+    }
+}
+impl<D: Device> Drop for Keyboard<D> {
+    fn drop(&mut self) {
+        let _ = self.reset(true);
+    }
+}
+fn scan_code(name: &str) -> Option<u16> {
+    Some(match name {
+        "Q" => 0x10,
+        "W" => 0x11,
+        "E" => 0x12,
+        "R" => 0x13,
+        "T" => 0x14,
+        "Y" => 0x15,
+        "U" => 0x16,
+        "A" => 0x1e,
+        "S" => 0x1f,
+        "D" => 0x20,
+        "F" => 0x21,
+        "G" => 0x22,
+        "H" => 0x23,
+        "J" => 0x24,
+        "Z" => 0x2c,
+        "X" => 0x2d,
+        "C" => 0x2e,
+        "V" => 0x2f,
+        "B" => 0x30,
+        "N" => 0x31,
+        "M" => 0x32,
+        _ => return None,
+    })
+}
 #[cfg(windows)]
 mod platform {
-    use std::{
-        cmp::Reverse,
-        collections::{BinaryHeap, HashMap},
-        sync::{mpsc, mpsc::Sender, OnceLock},
-        thread,
-        time::{Duration, Instant},
-    };
-
-    use super::Key;
-    use crate::timing::PreciseWaiter;
-
-    type Hwnd = isize;
-    const INPUT_KEYBOARD: u32 = 1;
-    const KEYEVENTF_KEYUP: u32 = 0x0002;
-    const KEYEVENTF_SCANCODE: u32 = 0x0008;
-    const VK_SHIFT: u16 = 0xa0;
-    const VK_CONTROL: u16 = 0xa2;
-    const SC_SHIFT: u16 = 0x2a;
-    const SC_CONTROL: u16 = 0x1d;
-
+    use super::{Device, Stroke};
     #[repr(C)]
     #[derive(Clone, Copy)]
     struct KeyboardInput {
@@ -36,65 +154,74 @@ mod platform {
         scan: u16,
         flags: u32,
         time: u32,
-        extra_info: usize,
+        extra: usize,
     }
     #[repr(C)]
     union InputData {
         keyboard: KeyboardInput,
-        _padding: [u8; 32],
+        padding: [u8; 32],
     }
     #[repr(C)]
     struct Input {
-        input_type: u32,
+        kind: u32,
         data: InputData,
     }
-
+    #[link(name = "user32")]
     unsafe extern "system" {
-        fn GetForegroundWindow() -> Hwnd;
-        fn GetWindowThreadProcessId(hwnd: Hwnd, process_id: *mut u32) -> u32;
+        fn GetForegroundWindow() -> isize;
+        fn GetWindowThreadProcessId(hwnd: isize, pid: *mut u32) -> u32;
         fn SendInput(count: u32, inputs: *const Input, size: i32) -> u32;
+        fn GetAsyncKeyState(key: i32) -> i16;
     }
-
-    struct HeldKey {
-        vk: u16,
-        owner: u64,
+    #[derive(Default)]
+    pub struct NativeDevice {
+        target: Option<u32>,
     }
-
-    enum Command {
-        Arm(mpsc::Sender<bool>),
-        Event(Vec<Key>, u64, u64),
-        Reset {
-            disarm: bool,
-            generation: u64,
-            reply: mpsc::Sender<()>,
-        },
+    fn foreground() -> Option<u32> {
+        let hwnd = unsafe { GetForegroundWindow() };
+        let mut pid = 0;
+        if hwnd != 0 {
+            unsafe { GetWindowThreadProcessId(hwnd, &mut pid) };
+        }
+        (pid != 0).then_some(pid)
     }
-
-    struct KeyboardState {
-        target: Option<(Hwnd, u32)>,
-        held: HashMap<u16, HeldKey>,
-        modifier: Option<&'static str>,
-        next_owner: u64,
-        generation: u64,
-        expiries: BinaryHeap<Reverse<(Instant, u64)>>,
-    }
-
-    impl KeyboardState {
-        fn new() -> Self {
-            Self {
-                target: None,
-                held: HashMap::new(),
-                modifier: None,
-                next_owner: 0,
-                generation: 0,
-                expiries: BinaryHeap::new(),
+    impl Device for NativeDevice {
+        fn arm(&mut self) -> Result<(), String> {
+            self.target = foreground().filter(|pid| *pid != std::process::id());
+            if self.target.is_none() {
+                Err("Foque a janela do jogo durante a contagem.".to_string())
+            } else {
+                Ok(())
             }
         }
-
-        fn send(&self, inputs: &[Input], force: bool) -> bool {
-            if inputs.is_empty() || !self.target_is_focused(force) {
-                return false;
+        fn focused(&self) -> bool {
+            self.target.is_some() && self.target == foreground()
+        }
+        fn disarm(&mut self) {
+            self.target = None;
+        }
+        fn shortcuts(&self) -> (bool, bool) {
+            unsafe { (GetAsyncKeyState(0x24) < 0, GetAsyncKeyState(0x23) < 0) }
+        }
+        fn send(&mut self, events: &[Stroke]) -> Result<(), String> {
+            if self.target.is_none() || events.is_empty() {
+                return Ok(());
             }
+            let inputs = events
+                .iter()
+                .map(|e| Input {
+                    kind: 1,
+                    data: InputData {
+                        keyboard: KeyboardInput {
+                            vk: 0,
+                            scan: e.scan,
+                            flags: 0x8 | if e.up { 0x2 } else { 0 },
+                            time: 0,
+                            extra: 0,
+                        },
+                    },
+                })
+                .collect::<Vec<_>>();
             let sent = unsafe {
                 SendInput(
                     inputs.len() as u32,
@@ -102,352 +229,158 @@ mod platform {
                     std::mem::size_of::<Input>() as i32,
                 )
             };
-            if sent > 0 && sent < inputs.len() as u32 {
-                let releases = inputs[..sent as usize]
+            if sent == inputs.len() as u32 {
+                Ok(())
+            } else {
+                // Recover every attempted down after a partial batch.
+                let releases = events
                     .iter()
-                    .map(|input| {
-                        let key = unsafe { input.data.keyboard };
-                        Self::key_input(key.scan, key.vk, true)
+                    .filter(|e| !e.up)
+                    .map(|e| Input {
+                        kind: 1,
+                        data: InputData {
+                            keyboard: KeyboardInput {
+                                vk: 0,
+                                scan: e.scan,
+                                flags: 0xa,
+                                time: 0,
+                                extra: 0,
+                            },
+                        },
                     })
                     .collect::<Vec<_>>();
-                unsafe {
-                    SendInput(
-                        releases.len() as u32,
-                        releases.as_ptr(),
-                        std::mem::size_of::<Input>() as i32,
-                    );
+                if !releases.is_empty() {
+                    unsafe {
+                        SendInput(
+                            releases.len() as u32,
+                            releases.as_ptr(),
+                            std::mem::size_of::<Input>() as i32,
+                        )
+                    };
                 }
-            }
-            sent == inputs.len() as u32
-        }
-
-        fn target_is_focused(&self, force: bool) -> bool {
-            let Some((target_hwnd, target_pid)) = self.target else {
-                return false;
-            };
-            if force {
-                return target_hwnd != 0;
-            }
-            foreground().is_some_and(|(_, process_id)| process_id == target_pid)
-        }
-
-        fn key_input(scan: u16, vk: u16, up: bool) -> Input {
-            Input {
-                input_type: INPUT_KEYBOARD,
-                data: InputData {
-                    keyboard: KeyboardInput {
-                        vk,
-                        scan,
-                        flags: KEYEVENTF_SCANCODE | if up { KEYEVENTF_KEYUP } else { 0 },
-                        time: 0,
-                        extra_info: 0,
-                    },
-                },
+                Err(format!(
+                    "SendInput enviou {sent}/{} eventos: {}",
+                    events.len(),
+                    std::io::Error::last_os_error()
+                ))
             }
         }
-
-        fn modifier_input(modifier: &'static str, up: bool) -> Input {
-            let (scan, vk) = if modifier == "shift" {
-                (SC_SHIFT, VK_SHIFT)
-            } else {
-                (SC_CONTROL, VK_CONTROL)
-            };
-            Self::key_input(scan, vk, up)
-        }
-
-        fn set_modifier(&mut self, next: Option<&'static str>) -> bool {
-            if self.modifier == next {
-                return true;
-            }
-            if let Some(current) = self.modifier {
-                if !self.send(&[Self::modifier_input(current, true)], true) {
-                    return false;
-                }
-                self.modifier = None;
-            }
-            if let Some(next) = next {
-                if !self.send(&[Self::modifier_input(next, false)], false) {
-                    return false;
-                }
-                self.modifier = Some(next);
-            }
-            true
-        }
-
-        fn press(&mut self, keys: &[Key], hold_ms: u64) {
-            if keys.is_empty() || !self.target_is_focused(false) {
-                return;
-            }
-            self.next_owner = self.next_owner.wrapping_add(1).max(1);
-            let owner = self.next_owner;
-            let mut groups: Vec<(Option<&'static str>, Vec<(u16, u16)>)> = Vec::new();
-            for key in keys {
-                let Some(scan) = scan_code(&key.name) else {
-                    continue;
-                };
-                let modifier = match key.modifier.as_deref() {
-                    Some("shift") => Some("shift"),
-                    Some("ctrl") => Some("ctrl"),
-                    _ => None,
-                };
-                let group_index = groups.iter().position(|group| group.0 == modifier);
-                let index = group_index.unwrap_or_else(|| {
-                    groups.push((modifier, Vec::new()));
-                    groups.len() - 1
-                });
-                groups[index].1.push((scan, key.name.as_bytes()[0] as u16));
-            }
-
-            let mut pressed = false;
-            for (modifier, keys) in groups {
-                if !self.set_modifier(modifier) {
-                    break;
-                }
-
-                let repeated = keys
-                    .iter()
-                    .filter_map(|(scan, _)| self.held.get(scan).map(|held| (*scan, held.vk)))
-                    .collect::<Vec<_>>();
-                if !repeated.is_empty() {
-                    let releases = repeated
-                        .iter()
-                        .map(|(scan, vk)| Self::key_input(*scan, *vk, true))
-                        .collect::<Vec<_>>();
-                    self.send(&releases, true);
-                    for (scan, _) in repeated {
-                        self.held.remove(&scan);
-                    }
-                }
-
-                let downs = keys
-                    .iter()
-                    .map(|(scan, vk)| Self::key_input(*scan, *vk, false))
-                    .collect::<Vec<_>>();
-                if self.send(&downs, false) {
-                    for (scan, vk) in keys {
-                        self.held.insert(scan, HeldKey { vk, owner });
-                    }
-                    pressed = true;
-                }
-            }
-
-            if pressed {
-                self.expiries.push(Reverse((
-                    Instant::now() + Duration::from_millis(hold_ms),
-                    owner,
-                )));
-            } else if self.held.is_empty() {
-                self.release_modifiers();
-            }
-        }
-
-        fn release_owner(&mut self, owner: u64) {
-            let owned = self
-                .held
-                .iter()
-                .filter_map(|(scan, held)| (held.owner == owner).then_some((*scan, held.vk)))
-                .collect::<Vec<_>>();
-            if !owned.is_empty() {
-                let releases = owned
-                    .iter()
-                    .map(|(scan, vk)| Self::key_input(*scan, *vk, true))
-                    .collect::<Vec<_>>();
-                self.send(&releases, true);
-                for (scan, _) in owned {
-                    self.held.remove(&scan);
-                }
-            }
-            if self.held.is_empty() {
-                self.release_modifiers();
-            }
-        }
-
-        fn release_modifiers(&mut self) {
-            for modifier in ["shift", "ctrl"] {
-                self.send(&[Self::modifier_input(modifier, true)], true);
-            }
-            self.modifier = None;
-        }
-
-        fn reset(&mut self, disarm: bool, generation: u64) {
-            if generation < self.generation {
-                return;
-            }
-            self.generation = generation;
-            let releases = self
-                .held
-                .iter()
-                .map(|(scan, held)| Self::key_input(*scan, held.vk, true))
-                .collect::<Vec<_>>();
-            self.send(&releases, true);
-            self.held.clear();
-            self.expiries.clear();
-            self.release_modifiers();
-            if disarm {
-                self.target = None;
-            }
-        }
-    }
-
-    static COMMANDS: OnceLock<Sender<Command>> = OnceLock::new();
-
-    fn commands() -> &'static Sender<Command> {
-        COMMANDS.get_or_init(|| {
-            let (sender, receiver) = mpsc::channel();
-            thread::spawn(move || run_worker(receiver));
-            sender
-        })
-    }
-
-    fn run_worker(receiver: mpsc::Receiver<Command>) {
-        let mut state = KeyboardState::new();
-        let mut waiter = PreciseWaiter::new();
-        loop {
-            while state
-                .expiries
-                .peek()
-                .is_some_and(|Reverse((deadline, _))| *deadline <= Instant::now())
-            {
-                if let Some(Reverse((_, owner))) = state.expiries.pop() {
-                    state.release_owner(owner);
-                }
-            }
-            let wait = state
-                .expiries
-                .peek()
-                .map(|Reverse((deadline, _))| deadline.saturating_duration_since(Instant::now()));
-            let command = match wait {
-                Some(wait) => match receiver.try_recv() {
-                    Ok(command) => command,
-                    Err(mpsc::TryRecvError::Disconnected) => break,
-                    Err(mpsc::TryRecvError::Empty) => {
-                        waiter.wait(wait.min(Duration::from_millis(1)));
-                        continue;
-                    }
-                },
-                None => match receiver.recv() {
-                    Ok(command) => command,
-                    Err(_) => break,
-                },
-            };
-            match command {
-                Command::Arm(reply) => {
-                    let armed = foreground().is_some_and(|target| {
-                        state.target = Some(target);
-                        true
-                    });
-                    let _ = reply.send(armed);
-                }
-                Command::Event(keys, hold_ms, generation) => {
-                    if generation == state.generation {
-                        state.press(&keys, hold_ms);
-                    }
-                }
-                Command::Reset {
-                    disarm,
-                    generation,
-                    reply,
-                } => {
-                    state.reset(disarm, generation);
-                    let _ = reply.send(());
-                }
-            }
-        }
-    }
-
-    fn foreground() -> Option<(Hwnd, u32)> {
-        let hwnd = unsafe { GetForegroundWindow() };
-        if hwnd == 0 {
-            return None;
-        }
-        let mut process_id = 0;
-        unsafe { GetWindowThreadProcessId(hwnd, &mut process_id) };
-        (process_id != 0).then_some((hwnd, process_id))
-    }
-
-    pub fn arm() -> bool {
-        let (reply, result) = mpsc::channel();
-        commands().send(Command::Arm(reply)).is_ok() && result.recv().unwrap_or(false)
-    }
-
-    pub fn reset(generation: u64) {
-        reset_inner(true, generation);
-    }
-
-    pub fn release(generation: u64) {
-        reset_inner(false, generation);
-    }
-
-    fn reset_inner(disarm: bool, generation: u64) {
-        let (reply, result) = mpsc::channel();
-        if commands()
-            .send(Command::Reset {
-                disarm,
-                generation,
-                reply,
-            })
-            .is_ok()
-        {
-            let _ = result.recv();
-        }
-    }
-
-    pub fn event(keys: &[Key], hold_ms: u64, generation: u64) -> bool {
-        commands()
-            .send(Command::Event(keys.to_vec(), hold_ms, generation))
-            .is_ok()
-    }
-
-    fn scan_code(name: &str) -> Option<u16> {
-        Some(match name {
-            "Q" => 0x10,
-            "W" => 0x11,
-            "E" => 0x12,
-            "R" => 0x13,
-            "T" => 0x14,
-            "Y" => 0x15,
-            "U" => 0x16,
-            "A" => 0x1e,
-            "S" => 0x1f,
-            "D" => 0x20,
-            "F" => 0x21,
-            "G" => 0x22,
-            "H" => 0x23,
-            "J" => 0x24,
-            "Z" => 0x2c,
-            "X" => 0x2d,
-            "C" => 0x2e,
-            "V" => 0x2f,
-            "B" => 0x30,
-            "N" => 0x31,
-            "M" => 0x32,
-            _ => return None,
-        })
     }
 }
-
 #[cfg(not(windows))]
 mod platform {
-    use super::Key;
-    pub fn arm() -> bool {
-        true
-    }
-    pub fn reset(_generation: u64) {}
-    pub fn release(_generation: u64) {}
-    pub fn event(_keys: &[Key], _hold_ms: u64, _generation: u64) -> bool {
-        true
+    use super::{Device, Stroke};
+    #[derive(Default)]
+    pub struct NativeDevice;
+    impl Device for NativeDevice {
+        fn arm(&mut self) -> Result<(), String> {
+            Err("A reprodução requer Windows x64.".to_string())
+        }
+        fn focused(&self) -> bool {
+            false
+        }
+        fn disarm(&mut self) {}
+        fn send(&mut self, _: &[Stroke]) -> Result<(), String> {
+            Ok(())
+        }
     }
 }
+pub use platform::NativeDevice;
 
-pub fn arm() -> bool {
-    platform::arm()
-}
-pub fn reset(generation: u64) {
-    platform::reset(generation)
-}
-pub fn release(generation: u64) {
-    platform::release(generation)
-}
-pub fn event(event: KeyboardEvent) -> bool {
-    platform::event(&event.keys, event.hold_ms, event.generation)
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+    #[derive(Default)]
+    pub struct FakeDevice {
+        pub armed: bool,
+        pub sent: Vec<Stroke>,
+        pub fail: bool,
+    }
+    impl Device for FakeDevice {
+        fn arm(&mut self) -> Result<(), String> {
+            self.armed = true;
+            Ok(())
+        }
+        fn focused(&self) -> bool {
+            self.armed
+        }
+        fn disarm(&mut self) {
+            self.armed = false;
+        }
+        fn send(&mut self, events: &[Stroke]) -> Result<(), String> {
+            if self.fail {
+                Err("injected SendInput failure".to_string())
+            } else {
+                self.sent.extend_from_slice(events);
+                Ok(())
+            }
+        }
+    }
+    pub fn key(name: &str, modifier: Option<&str>) -> Key {
+        Key {
+            name: name.to_owned(),
+            label: name.to_owned(),
+            modifier: modifier.map(str::to_owned),
+        }
+    }
+    #[test]
+    fn repeated_key_is_owned_by_latest_attack() {
+        let mut k = Keyboard::new(FakeDevice::default());
+        k.device.arm().unwrap();
+        k.press(0, &[key("A", None)], 1.0).unwrap();
+        k.press(1, &[key("A", None)], 2.0).unwrap();
+        k.expire(1.0).unwrap();
+        assert_eq!(k.active(), [1]);
+        k.expire(2.0).unwrap();
+        assert!(k.active().is_empty());
+        assert_eq!(
+            k.device
+                .sent
+                .iter()
+                .filter(|e| e.scan == 0x1e && e.up)
+                .count(),
+            2
+        );
+    }
+    #[test]
+    fn natural_shift_ctrl_chords_release_all_modifiers() {
+        let mut k = Keyboard::new(FakeDevice::default());
+        k.device.arm().unwrap();
+        k.press(
+            0,
+            &[
+                key("A", Some("shift")),
+                key("S", Some("ctrl")),
+                key("D", None),
+            ],
+            3.0,
+        )
+        .unwrap();
+        assert_eq!(k.active(), [0]);
+        assert!(k.device.sent.windows(2).any(|p| p
+            == [
+                Stroke {
+                    scan: 0x2a,
+                    up: false
+                },
+                Stroke {
+                    scan: 0x1e,
+                    up: false
+                }
+            ]));
+        k.reset(true).unwrap();
+        assert!(k.active().is_empty());
+        assert!(!k.device.armed);
+        for scan in [0x1e, 0x1f, 0x20, 0x2a, 0x1d] {
+            assert!(k.device.sent.contains(&Stroke { scan, up: true }));
+        }
+    }
+    #[test]
+    fn failed_send_never_confirms_attack() {
+        let mut k = Keyboard::new(FakeDevice::default());
+        k.device.arm().unwrap();
+        k.device.fail = true;
+        assert!(k.press(0, &[key("A", None)], 1.0).is_err());
+        assert!(k.active().is_empty());
+    }
 }

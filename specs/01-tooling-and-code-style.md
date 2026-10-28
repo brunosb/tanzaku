@@ -1,24 +1,7 @@
-# 01 — Ferramentas e estilo
+# Ferramentas e estilo
 
-Adicionar `@biomejs/biome` e `biome.json` como fonte única de formatação e organização de imports.
+Node serve ao TypeScript, Biome e CLI Tauri durante o desenvolvimento. O renderer usa ES2022 modules, compilado por `tsconfig.renderer.json`; não utiliza CommonJS, APIs Node ou transformação por expressões regulares.
 
-## Padrão
+`npm test` executa check, build, testes do renderer e testes Rust. Verificações adicionais: `node tools/run-cargo.cjs fmt --manifest-path src-tauri/Cargo.toml --check` e `node tools/run-cargo.cjs clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`.
 
-- aspas simples;
-- quatro espaços de indentação;
-- imports organizados automaticamente;
-- funções de topo separadas por linhas em branco;
-- nenhuma função gigante escrita em uma única linha.
-
-Scripts obrigatórios:
-
-```json
-{
-    "format": "biome format --write .",
-    "format:check": "biome format --check .",
-    "lint": "biome lint .",
-    "check": "biome check ."
-}
-```
-
-`npm test` executa Biome check, build TypeScript e testes unitários. Ignorar `node_modules/`, `.venv/`, `dist/`, `midi-cache/**/*.mid` e `midi-cache/.plan-cache/`. Formatação não deve misturar mudanças funcionais sem necessidade.
+O Rust está fixado em `rust-toolchain.toml`. Não incluir biblioteca pessoal, MIDIs ou outputs de build no Git.

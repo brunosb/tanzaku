@@ -9,26 +9,179 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::{storage, transcription};
 
-fn progress(app: &AppHandle, stage: &str, percent: f64) {
-    let _ = app.emit(
-        "youtube-progress",
-        serde_json::json!({ "stage": stage, "percent": percent }),
-    );
+#[derive(Clone, Default)]
+pub struct Jobs(std::sync::Arc<(std::sync::Mutex<JobState>, std::sync::Condvar)>);
+#[derive(Default)]
+struct JobState {
+    active: Option<(String, std::sync::Arc<std::sync::atomic::AtomicBool>)>,
+    canceled: std::collections::VecDeque<String>,
+    shutting_down: bool,
 }
-
-fn run(command: &str, args: &[&str]) -> Result<std::process::Output, String> {
-    Command::new(command)
-        .args(args)
-        .output()
-        .map_err(|error| format!("Não foi possível executar {command}: {error}"))
-        .and_then(|output| {
-            if output.status.success() {
-                Ok(output)
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                Err(format!("{command} terminou com erro: {}", stderr.trim()))
-            }
+pub struct Job {
+    id: String,
+    canceled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    jobs: Jobs,
+}
+impl Jobs {
+    pub fn start(&self, id: String) -> Result<Job, String> {
+        if id.is_empty() || id.len() > 100 {
+            return Err("Identificador de operação inválido.".to_string());
+        }
+        let mut state = self.0 .0.lock().map_err(|e| e.to_string())?;
+        if state.shutting_down || state.canceled.contains(&id) {
+            return Err("Conversão cancelada.".to_string());
+        }
+        if state.active.is_some() {
+            return Err(
+                "Já existe uma conversão em andamento. Aguarde seu encerramento.".to_string(),
+            );
+        }
+        let canceled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        state.active = Some((id.clone(), canceled.clone()));
+        Ok(Job {
+            id,
+            canceled,
+            jobs: self.clone(),
         })
+    }
+    pub fn cancel(&self, id: &str) {
+        if let Ok(mut state) = self.0 .0.lock() {
+            if let Some((active, cancel)) = &state.active {
+                if active == id {
+                    cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+            }
+            state.canceled.push_back(id.to_owned());
+            while state.canceled.len() > 64 {
+                state.canceled.pop_front();
+            }
+        }
+    }
+    pub fn cancel_all(&self) {
+        if let Ok(state) = self.0 .0.lock() {
+            if let Some((_, cancel)) = &state.active {
+                cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+    }
+    pub fn shutdown(&self) {
+        if let Ok(mut state) = self.0 .0.lock() {
+            state.shutting_down = true;
+            if let Some((_, cancel)) = &state.active {
+                cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+            // Give process cancellation and temporary-directory cleanup time to
+            // finish before the desktop process exits.
+            let _ = self
+                .0
+                 .1
+                .wait_timeout_while(state, std::time::Duration::from_secs(10), |s| {
+                    s.active.is_some()
+                });
+        }
+    }
+}
+impl Job {
+    pub fn check(&self) -> Result<(), String> {
+        if self.canceled.load(std::sync::atomic::Ordering::SeqCst) {
+            Err("Conversão cancelada.".to_string())
+        } else {
+            Ok(())
+        }
+    }
+    fn progress(&self, app: &AppHandle, stage: &str, percent: f64) {
+        let _ = app.emit(
+            "youtube-progress",
+            serde_json::json!({"jobId":self.id,"stage":stage,"percent":percent}),
+        );
+    }
+}
+impl Drop for Job {
+    fn drop(&mut self) {
+        if let Ok(mut state) = self.jobs.0 .0.lock() {
+            if state.active.as_ref().is_some_and(|(id, _)| id == &self.id) {
+                state.active = None;
+                self.jobs.0 .1.notify_all();
+            }
+        }
+    }
+}
+fn run(job: &Job, command: &str, args: &[&str]) -> Result<std::process::Output, String> {
+    use std::io::Read;
+    job.check()?;
+    let mut command_builder = Command::new(command);
+    command_builder
+        .args(args)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command_builder.creation_flags(0x08000000);
+    }
+    let mut child = command_builder
+        .spawn()
+        .map_err(|e| format!("Não foi possível executar {command}: {e}"))?;
+    let mut stdout = child
+        .stdout
+        .take()
+        .ok_or("Saída do processo indisponível.")?;
+    let mut stderr = child
+        .stderr
+        .take()
+        .ok_or("Erro do processo indisponível.")?;
+    let out = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        stdout.read_to_end(&mut bytes).map(|_| bytes)
+    });
+    let err = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        stderr.read_to_end(&mut bytes).map(|_| bytes)
+    });
+    let mut canceled = false;
+    let status = loop {
+        if job.check().is_err() {
+            canceled = true;
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                let _ = Command::new("taskkill")
+                    .args(["/PID", &child.id().to_string(), "/T", "/F"])
+                    .creation_flags(0x08000000)
+                    .output();
+            }
+            let _ = child.kill();
+            break child.wait().map_err(|e| e.to_string())?;
+        }
+        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+            break status;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    let stdout = out
+        .join()
+        .map_err(|_| "Falha ao ler saída.".to_string())?
+        .map_err(|e| e.to_string())?;
+    let stderr = err
+        .join()
+        .map_err(|_| "Falha ao ler erro.".to_string())?
+        .map_err(|e| e.to_string())?;
+    if canceled {
+        return Err("Conversão cancelada.".to_string());
+    }
+    let output = std::process::Output {
+        status,
+        stdout,
+        stderr,
+    };
+    if output.status.success() {
+        Ok(output)
+    } else {
+        Err(format!(
+            "{command} terminou com erro: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+    }
 }
 
 fn output_text(output: &std::process::Output) -> String {
@@ -183,7 +336,11 @@ fn find_downloaded_audio(root: &Path) -> Result<PathBuf, String> {
         .ok_or_else(|| "O vídeo não forneceu uma faixa de áudio compatível.".to_string())
 }
 
-pub fn add_youtube(app: &AppHandle, source_url: &str) -> Result<storage::LibraryEntry, String> {
+pub fn add_youtube(
+    app: &AppHandle,
+    source_url: &str,
+    job: Job,
+) -> Result<storage::LibraryEntry, String> {
     let parsed = url::Url::parse(source_url).map_err(|_| "URL inválida do YouTube.".to_string())?;
     if !matches!(
         parsed.host_str(),
@@ -195,15 +352,23 @@ pub fn add_youtube(app: &AppHandle, source_url: &str) -> Result<storage::Library
         return Err("URLs de playlist não são suportadas.".to_string());
     }
 
-    let root = std::env::temp_dir().join(format!("tanzaku-youtube-{}", std::process::id()));
-    fs::create_dir_all(&root).map_err(|error| error.to_string())?;
+    let expected_root = {
+        let _guard = storage::transaction()?;
+        storage::storage_root()?
+    };
+    let temp = tempfile::Builder::new()
+        .prefix("tanzaku-youtube-")
+        .tempdir()
+        .map_err(|e| e.to_string())?;
+    let root = temp.path();
     let result = (|| {
         let yt_dlp = tool_path(app, "yt-dlp.exe")?;
         let ffmpeg = tool_path(app, "ffmpeg.exe")?;
-        run(&ffmpeg, &["-version"])
+        run(&job, &ffmpeg, &["-version"])
             .map_err(|error| format!("O FFmpeg selecionado não pôde ser executado: {error}"))?;
-        progress(app, "Obtendo informações do vídeo", 0.0);
+        job.progress(app, "Obtendo informações do vídeo", 0.0);
         let metadata = run(
+            &job,
             &yt_dlp,
             &[
                 "--no-playlist",
@@ -221,10 +386,11 @@ pub fn add_youtube(app: &AppHandle, source_url: &str) -> Result<storage::Library
             title
         };
 
-        progress(app, "Baixando áudio", 0.0);
+        job.progress(app, "Baixando áudio", 0.0);
         let pattern = root.join("audio.%(ext)s");
         let pattern = pattern.to_string_lossy().into_owned();
         run(
+            &job,
             &yt_dlp,
             &[
                 "--no-playlist",
@@ -236,13 +402,14 @@ pub fn add_youtube(app: &AppHandle, source_url: &str) -> Result<storage::Library
                 source_url,
             ],
         )?;
-        let source_audio = find_downloaded_audio(&root)?;
+        let source_audio = find_downloaded_audio(root)?;
 
-        progress(app, "Convertendo para WAV", 0.0);
+        job.progress(app, "Convertendo para WAV", 0.0);
         let wav = root.join("audio.wav");
         let source_audio = source_audio.to_string_lossy().into_owned();
         let wav_text = wav.to_string_lossy().into_owned();
         run(
+            &job,
             &ffmpeg,
             &[
                 "-y",
@@ -257,14 +424,30 @@ pub fn add_youtube(app: &AppHandle, source_url: &str) -> Result<storage::Library
             ],
         )?;
 
-        progress(app, "Transcrevendo para MIDI", 0.0);
+        job.progress(app, "Transcrevendo para MIDI", 0.0);
         let midi = root.join("transcribed.mid");
-        transcription::transcribe_wav_for_app(app, &wav, &midi)?;
+        let summary =
+            transcription::transcribe_wav_cancellable(app, &wav, &midi, |done, total| {
+                job.check()?;
+                job.progress(
+                    app,
+                    "Transcrevendo para MIDI",
+                    done as f64 / total.max(1) as f64 * 100.0,
+                );
+                Ok(())
+            })?;
+        if summary.notes == 0 {
+            return Err("Não foram detectadas notas no áudio.".to_string());
+        }
+        let _guard = storage::transaction()?;
+        job.check()?;
+        if storage::storage_root()? != expected_root {
+            return Err("A pasta mudou; conversão cancelada.".to_string());
+        }
         let entry = storage::save_transcribed_midi(&midi, title, source_url)?;
-        progress(app, "Concluído", 100.0);
+        job.progress(app, "Concluído", 100.0);
         Ok(entry)
     })();
-    let _ = fs::remove_dir_all(&root);
     result
 }
 
@@ -272,7 +455,7 @@ pub fn add_youtube(app: &AppHandle, source_url: &str) -> Result<storage::Library
 mod tests {
     use std::{
         fs,
-        path::PathBuf,
+        path::{Path, PathBuf},
         sync::atomic::{AtomicUsize, Ordering},
     };
 
@@ -288,7 +471,7 @@ mod tests {
         dir.join(name)
     }
 
-    fn cleanup(path: &PathBuf) {
+    fn cleanup(path: &Path) {
         if let Some(parent) = path.parent() {
             let _ = fs::remove_dir_all(parent);
         }
@@ -374,5 +557,68 @@ mod tests {
 
         cleanup(&pointer);
         cleanup(&from_path);
+    }
+}
+
+#[cfg(test)]
+mod job_tests {
+    use super::*;
+    #[test]
+    fn only_one_job_can_run_and_cancellation_is_scoped() {
+        let jobs = Jobs::default();
+        let job = jobs.start("a".into()).unwrap();
+        assert!(jobs.start("b".into()).is_err());
+        jobs.cancel("other");
+        assert!(job.check().is_ok());
+        jobs.cancel("a");
+        assert!(job.check().is_err());
+        drop(job);
+        assert!(jobs.start("b".into()).is_ok());
+    }
+    #[test]
+    fn cancellation_before_start_and_shutdown_are_respected() {
+        let jobs = Jobs::default();
+        jobs.cancel("a");
+        assert!(jobs.start("a".into()).is_err());
+        let job = jobs.start("b".into()).unwrap();
+        jobs.cancel_all();
+        assert!(job.check().is_err());
+    }
+    #[cfg(windows)]
+    #[test]
+    fn canceled_child_process_is_reaped() {
+        let jobs = Jobs::default();
+        let job = jobs.start("process".into()).unwrap();
+        let cancel = jobs.clone();
+        let thread = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            cancel.cancel("process");
+        });
+        let start = std::time::Instant::now();
+        let result = run(&job, "cmd.exe", &["/C", "ping -n 10 127.0.0.1 > NUL"]);
+        thread.join().unwrap();
+        assert!(result.unwrap_err().contains("cancelada"));
+        assert!(start.elapsed() < std::time::Duration::from_secs(3));
+    }
+}
+
+#[cfg(test)]
+mod shutdown_tests {
+    use super::*;
+    #[test]
+    fn shutdown_waits_for_job_cleanup_and_rejects_new_jobs() {
+        let jobs = Jobs::default();
+        let job = jobs.start("shutdown".into()).unwrap();
+        let cleanup = std::thread::spawn(move || {
+            while job.check().is_ok() {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            drop(job);
+        });
+        jobs.shutdown();
+        assert!(jobs.0 .0.lock().unwrap().active.is_none());
+        assert!(jobs.start("late".into()).is_err());
+        cleanup.join().unwrap();
     }
 }

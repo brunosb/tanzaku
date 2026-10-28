@@ -77,7 +77,6 @@ input:focus-visible {
     align-items: center;
     gap: 8px;
     flex: 1;
-    -webkit-app-region: drag;
 }
 
 .window-mark {
@@ -95,7 +94,6 @@ input:focus-visible {
 .window-actions {
     display: flex;
     height: 100%;
-    -webkit-app-region: no-drag;
 }
 
 .window-action {
@@ -546,6 +544,8 @@ h1 {
 }
 
 .roll-cursor {
+    left: clamp(32px, 4vw, 48px);
+    will-change: transform;
     position: absolute;
     top: 0;
     bottom: 0;
@@ -561,10 +561,10 @@ h1 {
     top: 2px;
     display: flex;
     height: calc(clamp(18px, 2.5vh, 24px) - 4px);
-    min-width: 22px;
+    min-width: 0;
     align-items: center;
     overflow: hidden;
-    padding: 0 5px;
+    padding: 0;
     border-radius: 4px;
     color: #07100a;
     background: #7ab8ff;
@@ -1015,4 +1015,15 @@ h1 {
     .speed-control {
         display: none;
     }
+}
+
+.lane-label.current {
+    background: #7ab8ff;
+    color: #07100a;
+}
+.lane-label.current.shift {
+    background: #f5c451;
+}
+.lane-label.current.ctrl {
+    background: #ff7373;
 }

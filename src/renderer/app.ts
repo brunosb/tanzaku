@@ -1,29 +1,11 @@
-interface Window {
-    tanzaku: any
-}
-
-type PlaybackState = {
-    status: string
-    position: number
-    duration: number
-    speed: number
-    currentEventIndex: number
-}
-
-type PlaybackPlan = {
-    duration: number
-    events: Array<{
-        time: number
-        hold: number
-        keys: Array<{ name: string; label: string; modifier: string | null }>
-    }>
-}
-
-type Playlist = {
-    id: string
-    name: string
-    trackIds: string[]
-}
+import {
+    initialState,
+    type LibraryEntry,
+    type PlaybackPlan,
+    type PlaybackState,
+    type Playlist,
+} from './api.js'
+import { activeIndices, positionAt } from './roll-model.js'
 
 const PX_PER_SECOND = 120
 const KEY_GROUPS = [
@@ -33,13 +15,10 @@ const KEY_GROUPS = [
 ]
 const app = document.querySelector<HTMLElement>('#app')!
 let currentPlan: PlaybackPlan | null = null
-let currentState: PlaybackState = {
-    status: 'idle',
-    position: 0,
-    duration: 0,
-    speed: 1,
-    currentEventIndex: 0,
-}
+let currentState: PlaybackState = initialState()
+let stateReceivedAt = performance.now()
+let libraryEntries: LibraryEntry[] = []
+let modalGeneration = 0
 let selectedId = ''
 let selectedTitle = 'Selecione uma música'
 let playlists: Playlist[] = []
@@ -89,7 +68,7 @@ function renderShell(): void {
     app.innerHTML = `
         <div class="desktop-shell">
             <header class="window-chrome">
-                <div class="window-drag"><span class="window-mark">T</span><span>Tanzaku</span></div>
+                <div class="window-drag" data-tauri-drag-region><span class="window-mark" data-tauri-drag-region>T</span><span data-tauri-drag-region>Tanzaku</span></div>
                 <div class="window-actions">
                     <button class="window-action" id="window-minimize" title="Minimizar">−</button>
                     <button class="window-action" id="window-maximize" title="Maximizar">□</button>
@@ -164,6 +143,7 @@ function statusLabel(status: string): string {
     return (
         {
             idle: 'Pronto',
+            loading: 'Carregando',
             countdown: 'Preparando',
             playing: 'Tocando',
             paused: 'Pausado',
@@ -184,8 +164,8 @@ function showError(error: unknown): void {
     window.alert(message)
 }
 
-function renderLibrary(entries: any[]): void {
-    ;(window as any).__libraryEntries = entries
+function renderLibrary(entries: LibraryEntry[]): void {
+    libraryEntries = entries
     const target = document.querySelector('#library')
     if (!target) return
     if (!entries.length) {
@@ -279,16 +259,16 @@ function renderPlaylistDetails(): void {
         target.innerHTML = ''
         return
     }
-    const libraryEntries = (window as any).__libraryEntries ?? []
+    const entries = libraryEntries
     const tracks = playlist.trackIds
         .map((id: string) =>
-            libraryEntries.find((entry: any) => entry.id === id),
+            entries.find((entry: LibraryEntry) => entry.id === id),
         )
-        .filter(Boolean)
+        .filter((entry): entry is LibraryEntry => entry !== undefined)
     target.innerHTML = `
         <div class="playlist-details-heading"><strong>${escapeHtml(playlist.name)}</strong><small>${tracks.length} músicas</small></div>
         <div class="playlist-track-list">
-            ${tracks.length ? tracks.map((entry: any) => `<div class="playlist-track"><span title="${escapeHtml(entry.title)}">${escapeHtml(entry.title)}</span><button class="playlist-track-remove" data-playlist-id="${escapeHtml(playlist.id)}" data-track-id="${escapeHtml(entry.id)}" title="Remover da playlist">×</button></div>`).join('') : '<div class="empty-state compact">Nenhuma música nesta playlist.<br>Use ＋ na biblioteca para adicionar.</div>'}
+            ${tracks.length ? tracks.map((entry: LibraryEntry) => `<div class="playlist-track"><span title="${escapeHtml(entry.title)}">${escapeHtml(entry.title)}</span><button class="playlist-track-remove" data-playlist-id="${escapeHtml(playlist.id)}" data-track-id="${escapeHtml(entry.id)}" title="Remover da playlist">×</button></div>`).join('') : '<div class="empty-state compact">Nenhuma música nesta playlist.<br>Use ＋ na biblioteca para adicionar.</div>'}
         </div>`
     target
         .querySelectorAll<HTMLButtonElement>('.playlist-track-remove')
@@ -327,29 +307,14 @@ async function handleLibraryAction(
     action: string,
 ): Promise<void> {
     if (!trackId) return
-    const entries = (window as any).__libraryEntries ?? []
-    const entry = entries.find((item: any) => item.id === trackId)
+    const entries = libraryEntries
+    const entry = entries.find((item) => item.id === trackId)
     if (!entry) return
     if (action === 'delete') {
         if (!window.confirm(`Excluir “${entry.title}” e o arquivo MIDI?`))
             return
         try {
             await window.tanzaku.library.remove(trackId)
-            if (selectedId === trackId) {
-                selectedId = ''
-                selectedTitle = 'Selecione uma música'
-                currentPlan = null
-                currentState = {
-                    status: 'idle',
-                    position: 0,
-                    duration: 0,
-                    speed: currentState.speed,
-                    currentEventIndex: 0,
-                }
-                const title = document.querySelector('#selected')
-                if (title) title.textContent = selectedTitle
-                renderPlan({ events: [], duration: 0 })
-            }
             renderLibrary(await window.tanzaku.library.list())
             renderPlaylists(await window.tanzaku.playlists.list())
         } catch (error) {
@@ -364,8 +329,8 @@ function closeActionMenu(): void {
 }
 
 function openSongMenu(trackId: string, anchor: HTMLElement): void {
-    const entries = (window as any).__libraryEntries ?? []
-    const entry = entries.find((item: any) => item.id === trackId)
+    const entries = libraryEntries
+    const entry = entries.find((item) => item.id === trackId)
     const menu = document.querySelector<HTMLElement>('#action-menu')
     if (!entry || !menu) return
     menu.innerHTML = `
@@ -444,6 +409,7 @@ function openInputModal(
     mode: 'playlist' | 'youtube' | 'rename-playlist' | 'rename-midi',
     targetId = '',
 ): void {
+    modalGeneration++
     inputModalMode = mode
     inputModalTarget = targetId
     const modal = document.querySelector<HTMLElement>('#input-modal')
@@ -481,8 +447,8 @@ function openInputModal(
             ? (playlists.find((playlist) => playlist.id === targetId)?.name ??
               '')
             : mode === 'rename-midi'
-              ? (((window as any).__libraryEntries ?? []).find(
-                    (entry: any) => entry.id === targetId,
+              ? (libraryEntries.find(
+                    (entry: LibraryEntry) => entry.id === targetId,
                 )?.title ?? '')
               : ''
     input.value = currentName
@@ -500,6 +466,9 @@ function openInputModal(
 }
 
 function closeInputModal(): void {
+    modalGeneration++
+    if (inputModalMode === 'youtube')
+        void window.tanzaku.library.cancelYoutube().catch(showError)
     inputModalMode = null
     inputModalTarget = ''
     youtubeProgress = null
@@ -517,7 +486,8 @@ async function submitInputModal(): Promise<void> {
         '#input-modal-progress',
     )
     const value = input?.value.trim() ?? ''
-    if (!inputModalMode || !value || !submit) return
+    if (!inputModalMode || !value || !submit || submit.disabled) return
+    const generation = modalGeneration
     submit.disabled = true
     try {
         if (inputModalMode === 'playlist') {
@@ -527,6 +497,7 @@ async function submitInputModal(): Promise<void> {
         } else if (inputModalMode === 'youtube') {
             const entry = await window.tanzaku.library.addYoutube(value)
             renderLibrary(await window.tanzaku.library.list())
+            if (generation !== modalGeneration) return
             if (progress) progress.textContent = `Salvo: ${entry.title}`
         } else if (inputModalMode === 'rename-playlist') {
             await window.tanzaku.playlists.rename(inputModalTarget, value)
@@ -543,8 +514,9 @@ async function submitInputModal(): Promise<void> {
                 if (title) title.textContent = selectedTitle
             }
         }
-        closeInputModal()
+        if (generation === modalGeneration) closeInputModal()
     } catch (error) {
+        if (generation !== modalGeneration) return
         showError(error)
         submit.disabled = false
         if (progress) progress.textContent = 'Não foi possível concluir.'
@@ -554,25 +526,47 @@ async function submitInputModal(): Promise<void> {
 async function openSong(id: string): Promise<void> {
     if (!id) return
     try {
-        const plan = await window.tanzaku.playback.load(id)
-        selectedId = id
-        const button = document.querySelector<HTMLButtonElement>(
-            `.song[data-id="${CSS.escape(id)}"]`,
-        )
-        selectedTitle = button?.querySelector('strong')?.textContent ?? id
-        const title = document.querySelector('#selected')
-        if (title) title.textContent = selectedTitle
-        renderPlan(plan)
-        document
-            .querySelectorAll('.song')
-            .forEach((item) => item.classList.remove('active'))
-        button?.classList.add('active')
+        await window.tanzaku.playback.load(id)
     } catch (error) {
         showError(error)
     }
 }
 
+let noteElements: HTMLElement[][] = []
+let previousEventIndex = 0
+let previousActive = new Set<number>()
+let cursors: HTMLElement[] = []
+let scrolls: HTMLElement[] = []
+const viewportWidths = new Map<HTMLElement, number>()
+const viewportObserver = new ResizeObserver((entries) => {
+    for (const entry of entries)
+        viewportWidths.set(entry.target as HTMLElement, entry.contentRect.width)
+})
+let laneLabels = new Map<string, HTMLElement>()
+let previousLanes = new Map<string, string>()
 function renderPlan(plan: PlaybackPlan): void {
+    for (const name of previousLanes.keys())
+        laneLabels.get(name)?.classList.remove('current', 'shift', 'ctrl')
+    previousLanes.clear()
+    laneLabels = new Map(
+        Array.from(document.querySelectorAll<HTMLElement>('.lane-row')).map(
+            (row) => [
+                row.dataset.lane ?? '',
+                row.querySelector<HTMLElement>('.lane-label')!,
+            ],
+        ),
+    )
+    noteElements = []
+    previousEventIndex = 0
+    previousActive = new Set()
+    cursors = Array.from(document.querySelectorAll<HTMLElement>('.roll-cursor'))
+    scrolls = Array.from(document.querySelectorAll<HTMLElement>('.roll-scroll'))
+    viewportObserver.disconnect()
+    viewportWidths.clear()
+    for (const scroll of scrolls) {
+        viewportWidths.set(scroll, scroll.clientWidth)
+        viewportObserver.observe(scroll)
+    }
     currentPlan = plan
     const width = Math.max(900, plan.duration * PX_PER_SECOND)
     const content = document.querySelector<HTMLElement>('#roll-content')
@@ -582,20 +576,21 @@ function renderPlan(plan: PlaybackPlan): void {
         track.style.width = `${width}px`
     })
     plan.events.forEach((event, index) => {
-        const key = event.keys[0]
-        if (!key) return
-        const track = document.querySelector<HTMLElement>(
-            `.lane-track[data-track="${CSS.escape(key.name)}"]`,
-        )
-        if (!track) return
-        const note = document.createElement('span')
-        note.className = `note ${key.modifier ?? 'natural'}`
-        note.dataset.index = String(index)
-        note.textContent = key.label
-        note.title = `${key.label} · ${formatTime(event.time)} · ${event.hold.toFixed(2)}s`
-        note.style.left = `${event.time * PX_PER_SECOND}px`
-        note.style.width = `${Math.max(28, event.hold * PX_PER_SECOND)}px`
-        track.append(note)
+        for (const key of event.keys) {
+            const track = document.querySelector<HTMLElement>(
+                `.lane-track[data-track="${CSS.escape(key.name)}"]`,
+            )
+            if (!track) return
+            const note = document.createElement('span')
+            note.className = `note ${key.modifier ?? 'natural'}`
+            note.dataset.index = String(index)
+            note.textContent = key.label
+            note.title = `${key.label} · ${formatTime(event.time)} · ${event.hold.toFixed(2)}s`
+            note.style.left = `${event.time * PX_PER_SECOND}px`
+            note.style.width = `${event.hold * PX_PER_SECOND}px`
+            track.append(note)
+            ;(noteElements[index] ??= []).push(note)
+        }
     })
     const summary = document.querySelector('#plan-summary')
     if (summary)
@@ -605,20 +600,48 @@ function renderPlan(plan: PlaybackPlan): void {
 
 function renderFrame(): void {
     framePending = false
-    const visualPosition = seekPreview ?? currentState.position
+    const visualPosition =
+        seekPreview ??
+        positionAt(currentState, stateReceivedAt, performance.now())
     const duration = Math.max(0.001, currentState.duration)
     const cursorLeft = visualPosition * PX_PER_SECOND
-    document.querySelectorAll<HTMLElement>('.roll-cursor').forEach((cursor) => {
-        cursor.style.left = `calc(clamp(32px, 4vw, 48px) + ${cursorLeft}px)`
+    cursors.forEach((cursor) => {
+        cursor.style.transform = `translateX(${cursorLeft}px)`
     })
-    document.querySelectorAll<HTMLElement>('.note').forEach((note) => {
-        const index = Number(note.dataset.index)
-        note.classList.toggle('played', index < currentState.currentEventIndex)
-        note.classList.toggle(
-            'current',
-            index === currentState.currentEventIndex - 1,
-        )
-    })
+    const nextIndex = currentState.currentEventIndex
+    for (
+        let index = Math.min(previousEventIndex, nextIndex);
+        index < Math.max(previousEventIndex, nextIndex);
+        index++
+    ) {
+        for (const note of noteElements[index] ?? [])
+            note.classList.toggle('played', index < nextIndex)
+    }
+    previousEventIndex = nextIndex
+    const active = activeIndices(currentState, currentPlan, visualPosition)
+    for (const index of previousActive)
+        if (!active.has(index))
+            for (const note of noteElements[index] ?? [])
+                note.classList.remove('current')
+    for (const index of active)
+        if (!previousActive.has(index))
+            for (const note of noteElements[index] ?? [])
+                note.classList.add('current')
+    previousActive = active
+    const lanes = new Map<string, string>()
+    for (const index of active)
+        for (const key of currentPlan?.events[index]?.keys ?? [])
+            lanes.set(key.name, key.modifier ?? 'natural')
+    for (const [name, modifier] of previousLanes)
+        if (lanes.get(name) !== modifier)
+            laneLabels.get(name)?.classList.remove('current', 'shift', 'ctrl')
+    for (const [name, modifier] of lanes)
+        if (previousLanes.get(name) !== modifier) {
+            const label = laneLabels.get(name)
+            label?.classList.add('current')
+            if (modifier !== 'natural') label?.classList.add(modifier)
+        }
+    previousLanes = lanes
     const seek = document.querySelector<HTMLInputElement>('#seek')
     if (seek && !seeking) {
         seek.max = String(currentState.duration)
@@ -634,14 +657,20 @@ function renderFrame(): void {
         status.textContent =
             youtubeProgress ??
             (countdownRemaining === null
-                ? statusLabel(currentState.status)
+                ? (currentState.error ??
+                  (currentState.pauseReason === 'focus-lost'
+                      ? 'Pausado: o jogo perdeu o foco'
+                      : statusLabel(currentState.status)))
                 : `Começa em ${countdownRemaining}s`)
     const playToggle = document.querySelector<HTMLButtonElement>('#play-toggle')
     if (playToggle) {
         const playing = currentState.status === 'playing'
         playToggle.textContent = playing ? 'Ⅱ' : '▶'
         playToggle.title = playing ? 'Pausar' : 'Reproduzir'
-        playToggle.disabled = countdownRemaining !== null
+        playToggle.disabled =
+            countdownRemaining !== null ||
+            currentState.status === 'loading' ||
+            !currentPlan?.events.length
         playToggle.setAttribute('aria-label', playing ? 'Pausar' : 'Reproduzir')
     }
     const repeatToggle =
@@ -661,25 +690,25 @@ function renderFrame(): void {
         speed.value = String(currentState.speed)
 
     if (currentState.status === 'playing' && !seeking) {
-        document
-            .querySelectorAll<HTMLElement>('.roll-scroll')
-            .forEach((scroll) => {
-                const target = cursorLeft - scroll.clientWidth * 0.45
-                if (target > scroll.scrollLeft || target < scroll.scrollLeft)
-                    scroll.scrollLeft = Math.max(0, target)
-            })
+        scrolls.forEach((scroll) => {
+            const target = Math.max(
+                0,
+                cursorLeft - (viewportWidths.get(scroll) ?? 0) * 0.45,
+            )
+            if (Math.abs(target - scroll.scrollLeft) > 0.5)
+                scroll.scrollLeft = target
+        })
     } else if (
         !seeking &&
         (currentState.status === 'stopped' || currentState.status === 'idle') &&
         currentState.position === 0
     ) {
-        document
-            .querySelectorAll<HTMLElement>('.roll-scroll')
-            .forEach((scroll) => {
-                scroll.scrollLeft = 0
-            })
+        scrolls.forEach((scroll) => {
+            scroll.scrollLeft = 0
+        })
     }
     void duration
+    if (currentState.status === 'playing' && !document.hidden) requestRender()
 }
 
 function requestRender(): void {
@@ -695,31 +724,41 @@ function bindControls(): void {
     window.addEventListener('click', closeActionMenu)
     document
         .querySelector('#window-minimize')
-        ?.addEventListener('click', () => void window.tanzaku.window.minimize())
+        ?.addEventListener(
+            'click',
+            () => void window.tanzaku.window.minimize().catch(showError),
+        )
     document
         .querySelector('#window-maximize')
         ?.addEventListener(
             'click',
-            () => void window.tanzaku.window.toggleMaximize(),
+            () => void window.tanzaku.window.toggleMaximize().catch(showError),
         )
     document
         .querySelector('#window-close')
-        ?.addEventListener('click', () => void window.tanzaku.window.close())
+        ?.addEventListener(
+            'click',
+            () => void window.tanzaku.window.close().catch(showError),
+        )
     document.querySelector('#play-toggle')?.addEventListener('click', () => {
         if (currentState.status === 'playing')
-            void window.tanzaku.playback.pause()
-        else void window.tanzaku.playback.play()
+            void window.tanzaku.playback.pause().catch(showError)
+        else void window.tanzaku.playback.play().catch(showError)
     })
     document
         .querySelector('#stop')
-        ?.addEventListener('click', () => void window.tanzaku.playback.stop())
+        ?.addEventListener(
+            'click',
+            () => void window.tanzaku.playback.stop().catch(showError),
+        )
     document
         .querySelector('#repeat-toggle')
         ?.addEventListener('click', async () => {
-            repeatEnabled = Boolean(
-                await window.tanzaku.playback.toggleRepeat(),
-            )
-            requestRender()
+            try {
+                await window.tanzaku.playback.toggleRepeat()
+            } catch (error) {
+                showError(error)
+            }
         })
     document
         .querySelector('#playlist-create')
@@ -752,20 +791,25 @@ function bindControls(): void {
         seeking = true
         seekPreview = currentState.position
         resumeAfterSeek = currentState.status === 'playing'
-        if (resumeAfterSeek) void window.tanzaku.playback.pause()
+        if (resumeAfterSeek)
+            void window.tanzaku.playback.pause().catch(showError)
     })
     document.querySelector('#seek')?.addEventListener('input', (event) => {
         seekPreview = Number((event.target as HTMLInputElement).value)
         requestRender()
     })
     const commitSeek = (value: number): void => {
+        if (
+            !seeking &&
+            seekPreview === null &&
+            (document.activeElement as HTMLElement | null)?.id !== 'seek'
+        )
+            return
         const shouldResume = resumeAfterSeek
         seeking = false
         seekPreview = null
         resumeAfterSeek = false
-        void window.tanzaku.playback.seek(value).then(() => {
-            if (shouldResume) void window.tanzaku.playback.play()
-        })
+        void window.tanzaku.playback.seek(value, shouldResume).catch(showError)
     }
     document.querySelector('#seek')?.addEventListener('change', (event) => {
         commitSeek(Number((event.target as HTMLInputElement).value))
@@ -780,9 +824,9 @@ function bindControls(): void {
         ?.addEventListener(
             'change',
             (event) =>
-                void window.tanzaku.playback.setSpeed(
-                    Number((event.target as HTMLSelectElement).value),
-                ),
+                void window.tanzaku.playback
+                    .setSpeed(Number((event.target as HTMLSelectElement).value))
+                    .catch(showError),
         )
     document.querySelector('#folder')?.addEventListener('click', async () => {
         try {
@@ -815,10 +859,9 @@ void window.tanzaku.settings
             target.textContent = settings.storageRoot ?? 'Padrão do usuário'
     })
     .catch(showError)
-window.tanzaku?.onTrack((track: { id?: string; title?: string }) => {
-    if (!track?.id) return
-    selectedId = track.id
-    selectedTitle = track.title ?? track.id
+window.tanzaku.onTrack((track) => {
+    selectedId = track?.id ?? ''
+    selectedTitle = track?.title ?? 'Selecione uma música'
     const title = document.querySelector('#selected')
     if (title) title.textContent = selectedTitle
     document
@@ -832,6 +875,8 @@ window.tanzaku?.onTrack((track: { id?: string; title?: string }) => {
 })
 window.tanzaku?.playback.onState((state: PlaybackState) => {
     currentState = state
+    stateReceivedAt = performance.now()
+    repeatEnabled = state.repeatEnabled
     if (state.status === 'playing') countdownRemaining = null
     requestRender()
 })
@@ -852,3 +897,9 @@ window.tanzaku?.onYoutubeProgress(
         requestRender()
     },
 )
+
+document.addEventListener('visibilitychange', requestRender)
+window.addEventListener('unhandledrejection', (event) => {
+    event.preventDefault()
+    showError(event.reason)
+})

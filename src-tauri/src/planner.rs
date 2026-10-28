@@ -181,9 +181,9 @@ pub fn build_playback_plan(input: &[MidiNote]) -> PlaybackPlan {
     }
     events.sort_by(|left, right| left.time.total_cmp(&right.time));
     let duration = events
-        .last()
+        .iter()
         .map(|event| event.time + event.hold)
-        .unwrap_or(0.0);
+        .fold(0.0_f64, f64::max);
     stats.insert("notes".to_string(), input.len() as f64);
     stats.insert("groups".to_string(), groups.len() as f64);
     stats.insert("chords".to_string(), chords as f64);
@@ -194,5 +194,60 @@ pub fn build_playback_plan(input: &[MidiNote]) -> PlaybackPlan {
         events,
         duration,
         stats,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn note(time: f64, pitch: i32, duration: f64) -> MidiNote {
+        MidiNote {
+            time,
+            pitch,
+            velocity: 0.8,
+            duration,
+        }
+    }
+    #[test]
+    fn duration_covers_earlier_sustain() {
+        let p = build_playback_plan(&[note(0.0, 48, 10.0), note(1.0, 52, 0.1)]);
+        assert_eq!(p.duration, 10.0);
+    }
+    #[test]
+    fn all_36_pitches_and_actual_accidentals() {
+        for p in 48..=83 {
+            assert!(map_pitch(p, 48, 83).is_some());
+        }
+        assert!(map_pitch(47, 48, 83).is_none());
+        assert_eq!(
+            map_pitch(49, 48, 83).unwrap().modifier.as_deref(),
+            Some("shift")
+        );
+        assert_eq!(map_pitch(51, 48, 83).unwrap().name, "C");
+        assert_eq!(
+            map_pitch(51, 48, 83).unwrap().modifier.as_deref(),
+            Some("ctrl")
+        );
+    }
+    #[test]
+    fn chords_roll_by_five_ms_and_limit_selection() {
+        let notes = (48..=55).map(|p| note(0.0, p, 0.2)).collect::<Vec<_>>();
+        let p = build_playback_plan(&notes);
+        assert_eq!(p.events.len(), 6);
+        for (i, e) in p.events.iter().enumerate() {
+            assert!((e.time - i as f64 * 0.005).abs() < 1e-9);
+        }
+        assert_eq!(p.stats["dropped"], 2.0);
+    }
+    #[test]
+    fn separated_notes_keep_attacks_and_out_of_range_is_discarded() {
+        let p = build_playback_plan(&[
+            note(0.0, 48, 0.1),
+            note(0.025, 52, 0.1),
+            note(0.050, 84, 0.1),
+        ]);
+        assert_eq!(p.events.len(), 2);
+        assert_eq!(p.events[1].time, 0.025);
+        assert_eq!(p.stats["dropped"], 1.0);
     }
 }

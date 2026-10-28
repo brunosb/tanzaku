@@ -1,0 +1,120 @@
+{
+    "reference": "basic-pitch 0.4.0",
+    "cases": [
+        {
+            "name": "silence",
+            "frames": 32,
+            "bands": [],
+            "onsets": [],
+            "expected": []
+        },
+        {
+            "name": "short_and_long",
+            "frames": 80,
+            "bands": [[2, 12, 39, 0.8], [32, 52, 43, 0.7]],
+            "onsets": [[2, 39, 0.9], [32, 43, 0.9]],
+            "expected": [
+                {
+                    "start": 32,
+                    "end": 52,
+                    "pitch": 64,
+                    "velocity": 89,
+                    "startTick": 357,
+                    "endTick": 580
+                }
+            ]
+        },
+        {
+            "name": "chord",
+            "frames": 80,
+            "bands": [[2, 42, 27, 0.8], [2, 42, 31, 0.8], [2, 42, 34, 0.8]],
+            "onsets": [[2, 27, 0.9], [2, 31, 0.9], [2, 34, 0.9]],
+            "expected": [
+                {
+                    "start": 2,
+                    "end": 42,
+                    "pitch": 48,
+                    "velocity": 102,
+                    "startTick": 22,
+                    "endTick": 468
+                },
+                {
+                    "start": 2,
+                    "end": 42,
+                    "pitch": 52,
+                    "velocity": 102,
+                    "startTick": 22,
+                    "endTick": 468
+                },
+                {
+                    "start": 2,
+                    "end": 42,
+                    "pitch": 55,
+                    "velocity": 102,
+                    "startTick": 22,
+                    "endTick": 468
+                }
+            ]
+        },
+        {
+            "name": "ties_without_onsets",
+            "frames": 100,
+            "bands": [[4, 24, 39, 0.8], [54, 74, 43, 0.8]],
+            "onsets": [],
+            "expected": [
+                {
+                    "start": 4,
+                    "end": 23,
+                    "pitch": 60,
+                    "velocity": 102,
+                    "startTick": 45,
+                    "endTick": 256
+                },
+                {
+                    "start": 54,
+                    "end": 73,
+                    "pitch": 64,
+                    "velocity": 102,
+                    "startTick": 602,
+                    "endTick": 814
+                }
+            ]
+        },
+        {
+            "name": "window_boundaries",
+            "frames": 550,
+            "bands": [
+                [160, 190, 39, 0.8],
+                [330, 365, 43, 0.75],
+                [510, 545, 46, 0.7]
+            ],
+            "onsets": [[160, 39, 0.9], [330, 43, 0.9], [510, 46, 0.9]],
+            "expected": [
+                {
+                    "start": 160,
+                    "end": 190,
+                    "pitch": 60,
+                    "velocity": 102,
+                    "startTick": 1783,
+                    "endTick": 2108
+                },
+                {
+                    "start": 330,
+                    "end": 365,
+                    "pitch": 64,
+                    "velocity": 95,
+                    "startTick": 3668,
+                    "endTick": 4048
+                },
+                {
+                    "start": 510,
+                    "end": 545,
+                    "pitch": 67,
+                    "velocity": 89,
+                    "startTick": 5664,
+                    "endTick": 6045
+                }
+            ]
+        }
+    ]
+}

@@ -1,16 +1,17 @@
 {
     "$schema": "https://schema.tauri.app/config/2",
-    "productName": "Tanzaku Tauri Experiment",
+    "productName": "Tanzaku",
     "version": "0.1.0",
     "identifier": "com.tanzaku.desktop.experiment",
     "build": {
-        "frontendDist": "../dist-tauri"
+        "frontendDist": "../dist-tauri",
+        "beforeBuildCommand": "npm run build:ui"
     },
     "app": {
         "windows": [
             {
                 "label": "main",
-                "title": "Tanzaku Tauri Experiment",
+                "title": "Tanzaku",
                 "width": 900,
                 "height": 920,
                 "resizable": true,

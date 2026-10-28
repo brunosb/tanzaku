@@ -29,9 +29,7 @@ fn environment_for_model(model_path: &Path) -> Result<Environment, String> {
             }
             .map_err(|error| format!("Falha ao iniciar ONNX Runtime: {error}"))
         })
-        .as_ref()
-        .map(Clone::clone)
-        .map_err(Clone::clone)
+        .clone()
 }
 
 #[derive(Debug, Serialize)]
@@ -93,10 +91,28 @@ pub fn transcribe_wav_for_app(
     transcribe_wav(&model_path, &audio.samples, midi_path)
 }
 
+pub fn transcribe_wav_cancellable(
+    app: &tauri::AppHandle,
+    wav: &Path,
+    midi: &Path,
+    progress: impl FnMut(usize, usize) -> Result<(), String>,
+) -> Result<MidiTranscriptionSummary, String> {
+    let model = locate_model(app)?;
+    let audio = audio::read_wav(wav)?;
+    transcribe_with_progress(&model, &audio.samples, midi, progress)
+}
 fn transcribe_wav(
     model_path: &Path,
     samples: &[f32],
     midi_path: &Path,
+) -> Result<MidiTranscriptionSummary, String> {
+    transcribe_with_progress(model_path, samples, midi_path, |_, _| Ok(()))
+}
+fn transcribe_with_progress(
+    model_path: &Path,
+    samples: &[f32],
+    midi_path: &Path,
+    mut progress: impl FnMut(usize, usize) -> Result<(), String>,
 ) -> Result<MidiTranscriptionSummary, String> {
     use ndarray::Array3;
     use ort::value::TensorRef;
@@ -107,19 +123,27 @@ fn transcribe_wav(
     const OUTPUT_FRAMES: usize = 172;
     const OUTPUT_COLS: usize = 88;
 
+    let model_started = std::time::Instant::now();
     let environment = environment_for_model(model_path)?;
     let mut session = Session::builder(&environment)
         .map_err(|error| format!("Falha ao criar sessão ONNX: {error}"))?
         .commit_from_file(model_path)
         .map_err(|error| format!("Falha ao abrir o modelo ONNX: {error}"))?;
 
+    eprintln!(
+        "Sessão ONNX: {:.2} ms",
+        model_started.elapsed().as_secs_f64() * 1000.0
+    );
+    let inference_started = std::time::Instant::now();
     let mut padded = vec![0.0_f32; OVERLAP_SAMPLES / 2];
     padded.extend_from_slice(samples);
     let mut note_windows = Vec::new();
     let mut onset_windows = Vec::new();
     let mut contour_windows = Vec::new();
 
-    for start in (0..padded.len()).step_by(HOP) {
+    let total = padded.len().div_ceil(HOP);
+    for (window_index, start) in (0..padded.len()).step_by(HOP).enumerate() {
+        progress(window_index, total)?;
         let mut window = vec![0.0_f32; WINDOW];
         let end = (start + WINDOW).min(padded.len());
         window[..end - start].copy_from_slice(&padded[start..end]);
@@ -156,13 +180,30 @@ fn transcribe_wav(
         );
     }
 
+    progress(total, total)?;
     let note = unwrap_windows(&note_windows, OUTPUT_FRAMES, OUTPUT_COLS, samples.len());
     let onset = unwrap_windows(&onset_windows, OUTPUT_FRAMES, OUTPUT_COLS, samples.len());
     let contour = unwrap_windows(&contour_windows, OUTPUT_FRAMES, 264, samples.len());
     let frames = note.len() / OUTPUT_COLS;
+    eprintln!(
+        "Inferência e janelas: {:.2} ms",
+        inference_started.elapsed().as_secs_f64() * 1000.0
+    );
+    let decode_started = std::time::Instant::now();
     let mut notes = crate::decoder::decode_notes(&note, &onset, frames);
     crate::decoder::add_pitch_bends(&mut notes, &contour, frames);
+    progress(total, total)?;
+    eprintln!(
+        "Decoder: {:.2} ms, {} notas",
+        decode_started.elapsed().as_secs_f64() * 1000.0,
+        notes.len()
+    );
+    let write_started = std::time::Instant::now();
     crate::decoder::write_midi(midi_path, &notes)?;
+    eprintln!(
+        "Gravação MIDI: {:.2} ms",
+        write_started.elapsed().as_secs_f64() * 1000.0
+    );
     Ok(MidiTranscriptionSummary {
         audio_samples: samples.len(),
         frames,
@@ -178,7 +219,7 @@ fn unwrap_windows(
     original_samples: usize,
 ) -> Vec<f32> {
     let trim = 15;
-    let target_frames = original_samples / 256;
+    let target_frames = (original_samples as u128 * 86 / 22_050) as usize;
     let mut output = Vec::new();
     for window in windows {
         let start = trim * columns;
@@ -365,10 +406,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires TANZAKU_TEST_WAV; generated audio is tested separately"]
     fn transcribes_wav_from_environment_when_provided() {
-        let Some(wav_path) = std::env::var_os("TANZAKU_TEST_WAV") else {
-            return;
-        };
+        let wav_path = std::env::var_os("TANZAKU_TEST_WAV").expect("set TANZAKU_TEST_WAV");
         let output_path = std::env::temp_dir().join("tanzaku-basic-pitch-rust.mid");
         let model_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("models/nmp.onnx");
         let audio = crate::audio::read_wav(std::path::Path::new(&wav_path))
@@ -379,5 +419,62 @@ mod tests {
         assert!(summary.frames > 0);
         assert!(summary.notes > 0);
         assert!(output_path.is_file());
+    }
+}
+
+#[cfg(test)]
+mod pipeline_tests {
+    use super::*;
+    #[test]
+    fn generated_tone_runs_audio_onnx_decoder_and_midi_without_external_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let wav = dir.path().join("tone.wav");
+        let midi = dir.path().join("tone.mid");
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 22050,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut writer = hound::WavWriter::create(&wav, spec).unwrap();
+        for sample in 0..44100 {
+            let t = sample as f32 / 22050.0;
+            let envelope =
+                ((t - 0.1) * 100.0).clamp(0.0, 1.0) * ((1.85 - t) * 100.0).clamp(0.0, 1.0);
+            let value = (std::f32::consts::TAU * 440.0 * t).sin() * envelope * 0.7;
+            writer.write_sample((value * 32767.0) as i16).unwrap();
+        }
+        writer.finalize().unwrap();
+        let audio = audio::read_wav(&wav).unwrap();
+        let model = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(MODEL_RESOURCE_PATH);
+        let result = transcribe_wav(&model, &audio.samples, &midi).unwrap();
+        assert!(result.notes > 0);
+        let bytes = std::fs::read(midi).unwrap();
+        let notes = crate::midi::read_notes(&bytes).unwrap();
+        assert!(notes.iter().any(|n| n.pitch == 69));
+        assert!(notes.iter().all(|n| n.duration > 0.0 && n.time >= 0.0));
+    }
+    #[test]
+    fn cancellation_between_windows_does_not_write_midi() {
+        let dir = tempfile::tempdir().unwrap();
+        let midi = dir.path().join("canceled.mid");
+        let model = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(MODEL_RESOURCE_PATH);
+        let mut calls = 0;
+        let result = transcribe_with_progress(&model, &vec![0.0; 88200], &midi, |_, _| {
+            calls += 1;
+            if calls > 1 {
+                Err("canceled".to_string())
+            } else {
+                Ok(())
+            }
+        });
+        assert_eq!(result.unwrap_err(), "canceled");
+        assert!(!midi.exists());
+    }
+    #[test]
+    fn unwrapping_uses_reference_frame_count() {
+        let windows = vec![vec![0.0; 172 * 88]; 2];
+        let result = unwrap_windows(&windows, 172, 88, 44100);
+        assert_eq!(result.len() / 88, 172);
     }
 }

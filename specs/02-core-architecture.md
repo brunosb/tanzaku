@@ -1,15 +1,9 @@
-# 02 — Arquitetura do núcleo
+# Arquitetura
 
-Separar o projeto em:
+A interface usa exclusivamente `TanzakuApi`, definido em `src/renderer/api.ts`. O bridge registra todos os listeners antes de obter `playback_get_snapshot` e liberar os controles. Argumentos IPC são camelCase.
 
-```text
-src/core/{types,planner,playback-engine,keyboard-state,library,storage,acquisition}.ts
-src/platform/windows-input.ts
-src/electron/{main,preload}.ts
-src/renderer/{app,piano-roll,transport,library-view,settings-view}.ts
-src/cli/main.ts
-```
+O worker nativo é a autoridade de transporte, fila, countdown, repetição e teclas. Mantém o relógio monotônico, calcula prazos absolutos e chama o dispositivo Windows no mesmo worker, incluindo key-up. Leitura e planejamento de novas faixas ficam em tarefas separadas, canceladas logicamente por token.
 
-`core` não depende de Electron, DOM ou readline. `platform` encapsula SendInput, foco e janela do jogo. `electron` cria janelas e IPC. `renderer` contém somente a interface. `cli` mantém compatibilidade com o terminal.
+Snapshots completos incluem faixa, plano e estado. Estados periódicos não repetem o plano. Geração identifica o plano e sequência ordena mensagens. Resultados de carregamentos antigos e mensagens visuais antigas são descartados.
 
-O planner lê MIDI, transpõe, mapeia as 36 teclas, limita polifonia, agrupa acordes, preserva duração e gera eventos temporais. A geração continua em uma faixa principal, sem Demucs, stems ou tabs automáticas.
+Os comandos de aquisição, áudio e ONNX executam em `spawn_blocking`. Mutações da biblioteca são serializadas, e o diretório de destino de uma conversão é conferido antes da importação.

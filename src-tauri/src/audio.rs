@@ -7,6 +7,7 @@ pub struct MonoAudio {
 }
 
 pub fn read_wav(path: &Path) -> Result<MonoAudio, String> {
+    let started = std::time::Instant::now();
     let mut reader = hound::WavReader::open(path)
         .map_err(|error| format!("Não foi possível abrir o WAV: {error}"))?;
     let spec = reader.spec();
@@ -40,5 +41,9 @@ pub fn read_wav(path: &Path) -> Result<MonoAudio, String> {
         .chunks(channels)
         .map(|frame| frame.iter().sum::<f32>() / frame.len() as f32)
         .collect();
+    eprintln!(
+        "Leitura WAV: {:.2} ms",
+        started.elapsed().as_secs_f64() * 1000.0
+    );
     Ok(MonoAudio { samples: mono })
 }

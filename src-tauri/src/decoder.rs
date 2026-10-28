@@ -6,10 +6,9 @@ use std::path::Path;
 
 const FFT_HOP: f32 = 256.0;
 const SAMPLE_RATE: f32 = 22_050.0;
-const FRAME_RATE: f32 = SAMPLE_RATE / FFT_HOP;
 const ONSET_THRESHOLD: f32 = 0.5;
 const FRAME_THRESHOLD: f32 = 0.3;
-const MIN_NOTE_FRAMES: usize = 9;
+const MIN_NOTE_FRAMES: usize = 11;
 
 #[derive(Debug, Clone)]
 pub struct NoteEvent {
@@ -44,17 +43,14 @@ pub fn decode_notes(note: &[f32], onset: &[f32], frames: usize) -> Vec<NoteEvent
         if end.saturating_sub(start) <= MIN_NOTE_FRAMES {
             continue;
         }
-        let energy = mean_pitch(&note, frames, start, end, pitch);
+        let energy = mean_pitch(note, frames, start, end, pitch);
         erase_pitch_band(&mut remaining_energy, frames, start, end, pitch);
         result.push(make_note(start, end, pitch, energy));
     }
 
     // Basic Pitch's melodia trick repeatedly starts a note at the strongest
     // remaining activation, even if the model did not emit an onset there.
-    loop {
-        let Some((middle, pitch, peak)) = max_activation(&remaining_energy, frames) else {
-            break;
-        };
+    while let Some((middle, pitch, peak)) = max_activation(&remaining_energy, frames) {
         if peak <= FRAME_THRESHOLD {
             break;
         }
@@ -65,7 +61,7 @@ pub fn decode_notes(note: &[f32], onset: &[f32], frames: usize) -> Vec<NoteEvent
         if end.saturating_sub(start) <= MIN_NOTE_FRAMES {
             continue;
         }
-        let energy = mean_pitch(&note, frames, start, end, pitch);
+        let energy = mean_pitch(note, frames, start, end, pitch);
         result.push(make_note(start, end, pitch, energy));
     }
 
@@ -205,7 +201,9 @@ fn extend_backward(energy: &mut [f32], frames: usize, middle: usize, pitch: usiz
 
 fn max_activation(energy: &[f32], frames: usize) -> Option<(usize, usize, f32)> {
     energy
-        .chunks_exact(88)
+        .as_chunks::<88>()
+        .0
+        .iter()
         .take(frames)
         .enumerate()
         .flat_map(|(time, row)| {
@@ -214,7 +212,12 @@ fn max_activation(energy: &[f32], frames: usize) -> Option<(usize, usize, f32)> 
                 .enumerate()
                 .map(move |(pitch, value)| (time, pitch, value))
         })
-        .max_by(|left, right| left.2.total_cmp(&right.2))
+        .max_by(|left, right| {
+            left.2
+                .total_cmp(&right.2)
+                .then_with(|| right.0.cmp(&left.0))
+                .then_with(|| right.1.cmp(&left.1))
+        })
 }
 
 fn mean_pitch(energy: &[f32], _frames: usize, start: usize, end: usize, pitch: usize) -> f32 {
@@ -235,9 +238,14 @@ fn make_note(start: usize, end: usize, pitch: usize, energy: f32) -> NoteEvent {
     }
 }
 
+pub fn frame_time(frame: usize) -> f64 {
+    let hop = FFT_HOP as f64 / SAMPLE_RATE as f64;
+    let window_offset = hop * (172.0 - 43_844.0 / FFT_HOP as f64) + 0.0018;
+    frame as f64 * hop - window_offset * (frame / 172) as f64
+}
 pub fn write_midi(path: &Path, notes: &[NoteEvent]) -> Result<(), String> {
     let ticks_per_beat = 480_u32;
-    let ticks_per_second = 960.0_f32;
+    let ticks_per_second = 960.0_f64;
     let mut events = Vec::with_capacity(notes.len() * 4 + 2);
     events.push((
         0_u32,
@@ -245,17 +253,20 @@ pub fn write_midi(path: &Path, notes: &[NoteEvent]) -> Result<(), String> {
         TrackEventKind::Meta(MetaMessage::Tempo(500_000.into())),
     ));
     for note in notes {
-        let start = ((note.start_frame as f32 / FRAME_RATE) * ticks_per_second).round() as u32;
-        let end = ((note.end_frame as f32 / FRAME_RATE) * ticks_per_second).round() as u32;
+        let start = (frame_time(note.start_frame) * ticks_per_second).round() as u32;
+        let end = (frame_time(note.end_frame) * ticks_per_second).round() as u32;
         for (frame, bend) in &note.pitch_bends {
-            let time = ((*frame as f32 / FRAME_RATE) * ticks_per_second).round() as u32;
+            let time = (frame_time(*frame) * ticks_per_second).round() as u32;
             events.push((
                 time,
                 0_u8,
                 TrackEventKind::Midi {
                     channel: 0.into(),
                     message: MidiMessage::PitchBend {
-                        bend: PitchBend::from_int((*bend as i32 * 4096 / 3) as i16),
+                        bend: PitchBend::from_int(
+                            ((*bend as f64 * 4096.0 / 3.0).round() as i32).clamp(-8192, 8191)
+                                as i16,
+                        ),
                     },
                 },
             ));
@@ -331,5 +342,91 @@ mod tests {
         assert_eq!(decoded[0].pitch, 21);
         assert_eq!(decoded[0].start_frame, 2);
         assert_eq!(decoded[0].end_frame, frames - 1);
+    }
+}
+
+#[cfg(test)]
+mod reference_tests {
+    use super::*;
+    #[test]
+    fn matches_basic_pitch_040_controlled_tensors_and_midi_ticks() {
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../../test/fixtures/basic-pitch-0.4.0.json"))
+                .unwrap();
+        for case in fixture["cases"].as_array().unwrap() {
+            let frames = case["frames"].as_u64().unwrap() as usize;
+            let mut note = vec![0.0_f32; frames * 88];
+            let mut onset = note.clone();
+            for band in case["bands"].as_array().unwrap() {
+                for t in band[0].as_u64().unwrap()..band[1].as_u64().unwrap() {
+                    note[t as usize * 88 + band[2].as_u64().unwrap() as usize] =
+                        band[3].as_f64().unwrap() as f32;
+                }
+            }
+            for v in case["onsets"].as_array().unwrap() {
+                onset[v[0].as_u64().unwrap() as usize * 88 + v[1].as_u64().unwrap() as usize] =
+                    v[2].as_f64().unwrap() as f32;
+            }
+            let notes = decode_notes(&note, &onset, frames);
+            let expected = case["expected"].as_array().unwrap();
+            assert_eq!(notes.len(), expected.len(), "{}", case["name"]);
+            let temp = tempfile::tempdir().unwrap();
+            let path = temp.path().join("out.mid");
+            write_midi(&path, &notes).unwrap();
+            let bytes = std::fs::read(path).unwrap();
+            let parsed = crate::midi::read_notes(&bytes).unwrap();
+            for ((actual, e), midi) in notes.iter().zip(expected).zip(parsed) {
+                assert_eq!(
+                    (
+                        actual.start_frame,
+                        actual.end_frame,
+                        actual.pitch,
+                        actual.velocity
+                    ),
+                    (
+                        e["start"].as_u64().unwrap() as usize,
+                        e["end"].as_u64().unwrap() as usize,
+                        e["pitch"].as_u64().unwrap() as u8,
+                        e["velocity"].as_u64().unwrap() as u8
+                    ),
+                    "{}",
+                    case["name"]
+                );
+                assert!((midi.time * 960.0 - e["startTick"].as_f64().unwrap()).abs() <= 1.0);
+                assert!(
+                    ((midi.time + midi.duration) * 960.0 - e["endTick"].as_f64().unwrap()).abs()
+                        <= 1.0
+                );
+            }
+        }
+    }
+    #[test]
+    fn extreme_bends_keep_sign_and_saturate_before_cast() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bend.mid");
+        write_midi(
+            &path,
+            &[NoteEvent {
+                start_frame: 1,
+                end_frame: 30,
+                pitch: 60,
+                velocity: 100,
+                pitch_bends: vec![(1, 25), (2, -25)],
+            }],
+        )
+        .unwrap();
+        let bytes = std::fs::read(path).unwrap();
+        let smf = Smf::parse(&bytes).unwrap();
+        let bends = smf.tracks[0]
+            .iter()
+            .filter_map(|e| match e.kind {
+                TrackEventKind::Midi {
+                    message: MidiMessage::PitchBend { bend },
+                    ..
+                } => Some(bend.as_int()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(bends, [8191, -8192]);
     }
 }

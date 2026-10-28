@@ -1,42 +1,9 @@
-# Migração do YouTube para Tauri/Rust
+# Pipeline nativo de YouTube e transcrição
 
-## Situação atual
+O fluxo distribuído é yt-dlp → FFmpeg mono 22050 Hz → ONNX Runtime/Basic Pitch → decoder Rust → MIDI → biblioteca. Não há backend Python em produção.
 
-O Electron executa este pipeline:
+Uma operação ativa por processo, identificada por jobId, possui flag de cancelamento e diretório temporário exclusivo. Subprocessos têm saída drenada em paralelo; cancelar encerra a árvore do processo no Windows e aguarda sua saída. A inferência verifica cancelamento entre janelas. Antes da importação, a transação verifica cancelamento e a raiz original.
 
-1. `yt-dlp` obtém o título e baixa o áudio.
-2. `ffmpeg` converte o áudio para WAV mono em 22050 Hz.
-3. Python/Basic Pitch executa o modelo e grava o MIDI.
-4. O Electron importa o MIDI produzido para a biblioteca.
+O ambiente ONNX é único e compartilhado; sessões são criadas por operação. O decoder congela as regras do Basic Pitch 0.4.0: thresholds 0.5/0.3, limiar mínimo de 11 frames, desempate da primeira ativação, corte de frames a 86 FPS e a correção temporal da versão de referência. Bends saturam antes de converter para i16.
 
-O Tauri ainda não chama esse fluxo. O bundle Tauri não deve depender de Python,
-uv, FFmpeg ou instalações globais do usuário.
-
-## Estratégia escolhida
-
-Migrar a transcrição para o backend Rust em três fatias:
-
-1. **Inferência ONNX**: incluir o `nmp.onnx` do Basic Pitch como recurso do
-   aplicativo e executar o modelo com um runtime ONNX nativo.
-2. **Decodificação MIDI**: portar o pré-processamento de áudio e o algoritmo de
-   `note_creation.py`, preservando thresholds, duração mínima e tempo usados
-   atualmente.
-3. **Aquisição de áudio**: substituir a chamada Python/FFmpeg por uma solução
-   distribuível. A primeira alternativa é um componente de download empacotado;
-   a transcrição não deve voltar a procurar Python no PATH.
-
-## Critérios de aceitação
-
-- O Electron continua usando o pipeline atual durante a migração.
-- O Tauri recebe uma URL individual e retorna título, progresso e MIDI.
-- Uma mesma entrada WAV produz notas equivalentes nos dois backends dentro de
-  uma tolerância documentada de tempo e pitch.
-- O instalador Tauri funciona sem Python, uv ou Rust instalados.
-- O modelo e componentes nativos são versionados ou obtidos em uma etapa de
-  build reproduzível, nunca baixados silenciosamente durante a execução.
-
-## Próxima implementação
-
-Criar um comando Rust de diagnóstico que carrega o modelo ONNX, informa seus
-nomes/formas de entrada e saída e valida o recurso empacotado. Depois disso,
-portar o pré-processamento e adicionar um teste dourado com um WAV curto.
+As fixtures em test/fixtures são geradas pela versão Python somente no desenvolvimento e são testadas sem Python. O script `tools/generate-reference-fixtures.py` exige Basic Pitch 0.4.0. A equivalência dos tensores controlados não substitui uma avaliação musical com gravações reais.

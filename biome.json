@@ -31,12 +31,12 @@
             "!node_modules/**",
             "!.venv/**",
             "!dist/**",
-            "!dist-electron/**",
             "!dist-tauri/**",
             "!src-tauri/target/**",
             "!src-tauri/gen/**",
             "!midi-cache/**/*.mid",
-            "!midi-cache/.plan-cache/**"
+            "!midi-cache/.plan-cache/**",
+            "!dist-renderer/**"
         ]
     }
 }
