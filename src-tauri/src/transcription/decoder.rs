@@ -350,9 +350,11 @@ mod reference_tests {
     use super::*;
     #[test]
     fn matches_basic_pitch_040_controlled_tensors_and_midi_ticks() {
-        let fixture: serde_json::Value =
-            serde_json::from_str(include_str!("../../test/fixtures/basic-pitch-0.4.0.json"))
-                .unwrap();
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../test/fixtures/basic-pitch-0.4.0.json"
+        )))
+        .unwrap();
         for case in fixture["cases"].as_array().unwrap() {
             let frames = case["frames"].as_u64().unwrap() as usize;
             let mut note = vec![0.0_f32; frames * 88];
@@ -374,7 +376,7 @@ mod reference_tests {
             let path = temp.path().join("out.mid");
             write_midi(&path, &notes).unwrap();
             let bytes = std::fs::read(path).unwrap();
-            let parsed = crate::midi::read_notes(&bytes).unwrap();
+            let parsed = crate::music::midi::read_notes(&bytes).unwrap();
             for ((actual, e), midi) in notes.iter().zip(expected).zip(parsed) {
                 assert_eq!(
                     (

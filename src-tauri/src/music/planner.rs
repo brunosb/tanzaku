@@ -1,37 +1,5 @@
+use super::types::{Key, MidiNote, PlaybackEvent, PlaybackPlan};
 use std::collections::BTreeMap;
-
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone)]
-pub struct MidiNote {
-    pub time: f64,
-    pub pitch: i32,
-    pub velocity: f64,
-    pub duration: f64,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Key {
-    pub name: String,
-    pub modifier: Option<String>,
-    pub label: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct PlaybackEvent {
-    pub time: f64,
-    pub keys: Vec<Key>,
-    pub hold: f64,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct PlaybackPlan {
-    pub events: Vec<PlaybackEvent>,
-    pub duration: f64,
-    pub stats: BTreeMap<String, f64>,
-}
-
 const ROWS: [&str; 3] = ["ZXCVBNM", "ASDFGHJ", "QWERTYU"];
 
 pub fn map_pitch(pitch: i32, low_pitch: i32, high_pitch: i32) -> Option<Key> {

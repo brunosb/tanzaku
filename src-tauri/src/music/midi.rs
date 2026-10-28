@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use midly::{MidiMessage, Smf, Timing, TrackEventKind};
 
-use crate::planner::MidiNote;
+use crate::music::types::MidiNote;
 
 #[derive(Clone)]
 struct RawEvent {

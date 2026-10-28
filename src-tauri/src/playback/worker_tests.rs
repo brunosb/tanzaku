@@ -1,13 +1,26 @@
-use super::*;
+use super::{
+    controller::{Action, PlaybackController},
+    events::Publisher,
+    keyboard::Device,
+    loader::{LoadSpec, Loader, Prepared, Queue, WorkerConfig},
+    types::*,
+    worker::run_worker,
+};
+use crate::music::types::PlaybackPlan;
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, Mutex,
+};
+use std::{
+    sync::mpsc::{self, Sender},
+    thread,
+    time::{Duration, Instant},
 };
 #[derive(Clone, Default)]
 struct DeviceProbe {
     focused: Arc<AtomicBool>,
     arms: Arc<AtomicUsize>,
-    strokes: Arc<Mutex<Vec<crate::input::Stroke>>>,
+    strokes: Arc<Mutex<Vec<crate::playback::keyboard::Stroke>>>,
 }
 impl Device for DeviceProbe {
     fn arm(&mut self) -> Result<(), String> {
@@ -21,7 +34,7 @@ impl Device for DeviceProbe {
     fn disarm(&mut self) {
         self.focused.store(false, Ordering::SeqCst);
     }
-    fn send(&mut self, v: &[crate::input::Stroke]) -> Result<(), String> {
+    fn send(&mut self, v: &[crate::playback::keyboard::Stroke]) -> Result<(), String> {
         self.strokes.lock().unwrap().extend_from_slice(v);
         Ok(())
     }
@@ -103,10 +116,10 @@ fn prepared(id: &str, time: f64, hold: f64) -> Prepared {
             title: id.to_string(),
         },
         plan: PlaybackPlan {
-            events: vec![crate::planner::PlaybackEvent {
+            events: vec![crate::music::types::PlaybackEvent {
                 time,
                 hold,
-                keys: vec![crate::input::tests::key("A", Some("shift"))],
+                keys: vec![crate::playback::keyboard::tests::key("A", Some("shift"))],
             }],
             duration: time + hold,
             stats: Default::default(),
@@ -186,7 +199,7 @@ fn shutdown_confirms_release_of_sustain_and_modifiers() {
     h.controller.request(Action::Shutdown).unwrap();
     let strokes = h.device.strokes.lock().unwrap();
     for scan in [0x1e, 0x2a, 0x1d] {
-        assert!(strokes.contains(&crate::input::Stroke { scan, up: true }));
+        assert!(strokes.contains(&crate::playback::keyboard::Stroke { scan, up: true }));
     }
 }
 
