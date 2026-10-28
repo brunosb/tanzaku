@@ -3,9 +3,13 @@ mod decoder;
 mod input;
 mod midi;
 mod planner;
+mod playback;
 mod storage;
+mod timing;
 mod transcription;
 mod youtube;
+
+use tauri::Manager;
 
 fn new_playlist_id() -> String {
     let value = std::time::SystemTime::now()
@@ -57,7 +61,10 @@ fn library_delete(id: String) -> Result<Vec<storage::LibraryEntry>, String> {
 }
 
 #[tauri::command]
-fn playback_load(id: String) -> Result<planner::PlaybackPlan, String> {
+fn playback_load(
+    id: String,
+    controller: tauri::State<'_, playback::PlaybackController>,
+) -> Result<planner::PlaybackPlan, String> {
     let entry = storage::read_library()
         .into_iter()
         .find(|entry| entry.id == id)
@@ -69,22 +76,48 @@ fn playback_load(id: String) -> Result<planner::PlaybackPlan, String> {
     if plan.events.is_empty() {
         return Err("O MIDI não possui notas utilizáveis.".to_string());
     }
+    controller.load(plan.clone())?;
     Ok(plan)
+}
+
+#[tauri::command]
+fn playback_start(
+    controller: tauri::State<'_, playback::PlaybackController>,
+) -> Result<(), String> {
+    controller.play()
+}
+
+#[tauri::command]
+fn playback_pause(
+    controller: tauri::State<'_, playback::PlaybackController>,
+) -> Result<(), String> {
+    controller.pause()
+}
+
+#[tauri::command]
+fn playback_stop(controller: tauri::State<'_, playback::PlaybackController>) -> Result<(), String> {
+    controller.stop()
+}
+
+#[tauri::command]
+fn playback_seek(
+    controller: tauri::State<'_, playback::PlaybackController>,
+    position: f64,
+) -> Result<(), String> {
+    controller.seek(position)
+}
+
+#[tauri::command]
+fn playback_set_speed(
+    controller: tauri::State<'_, playback::PlaybackController>,
+    speed: f64,
+) -> Result<(), String> {
+    controller.set_speed(speed)
 }
 
 #[tauri::command]
 fn keyboard_arm() -> bool {
     input::arm()
-}
-
-#[tauri::command]
-fn keyboard_event(event: input::KeyboardEvent) -> bool {
-    input::event(event)
-}
-
-#[tauri::command]
-fn keyboard_reset() {
-    input::reset();
 }
 
 #[tauri::command]
@@ -289,6 +322,10 @@ fn library_add_youtube(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            app.manage(playback::PlaybackController::new(app.handle().clone()));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             library_delete,
             library_add_youtube,
@@ -296,8 +333,11 @@ pub fn run() {
             library_list,
             library_rename,
             keyboard_arm,
-            keyboard_event,
-            keyboard_reset,
+            playback_pause,
+            playback_seek,
+            playback_set_speed,
+            playback_start,
+            playback_stop,
             playlist_add,
             playlist_create,
             playlist_delete,

@@ -47,8 +47,6 @@ const chooseStorageDirectory = async (path?: string) => {
     return directory
 }
 
-const emptyUnsubscribe = () => () => undefined
-
 type PlaybackPlan = {
     duration: number
     events: Array<{ time: number; hold: number; keys: unknown[] }>
@@ -63,7 +61,7 @@ type PlaybackState = {
     currentEventIndex: number
 }
 
-const playbackState: PlaybackState = {
+let playbackState: PlaybackState = {
     status: 'idle',
     position: 0,
     duration: 0,
@@ -71,16 +69,14 @@ const playbackState: PlaybackState = {
     currentEventIndex: 0,
 }
 let playbackPlan: PlaybackPlan = { events: [], duration: 0 }
-let playbackStartedAt = 0
-let playbackGeneration = 0
-let playbackEventTimer: ReturnType<typeof setTimeout> | undefined
-let playbackTickTimer: ReturnType<typeof setTimeout> | undefined
 const stateListeners = new Set<(state: PlaybackState) => void>()
 const eventListeners = new Set<(event: unknown, index: number) => void>()
+const planListeners = new Set<(plan: PlaybackPlan) => void>()
 const countdownListeners = new Set<(value: { remaining: number }) => void>()
 let countdownGeneration = 0
 let playlistQueue: string[] = []
 let playlistQueueIndex = -1
+let advancingPlaylist = false
 const trackListeners = new Set<(track: { id: string; title: string }) => void>()
 
 const emitCountdown = (remaining: number) => {
@@ -92,94 +88,16 @@ const emitPlaybackState = () => {
     for (const listener of stateListeners) listener(snapshot)
 }
 
-const clearPlaybackTimers = () => {
-    if (playbackEventTimer) clearTimeout(playbackEventTimer)
-    if (playbackTickTimer) clearTimeout(playbackTickTimer)
-    playbackEventTimer = undefined
-    playbackTickTimer = undefined
-}
-
-const playbackPosition = () => {
-    if (playbackState.status !== 'playing') return playbackState.position
-    const elapsed =
-        ((performance.now() - playbackStartedAt) / 1000) * playbackState.speed
-    return Math.max(0, Math.min(playbackState.duration, elapsed))
-}
-
-const finishPlayback = () => {
-    clearPlaybackTimers()
-    playbackState.position = playbackState.duration
-    if (
-        playlistQueueIndex >= 0 &&
-        playlistQueueIndex + 1 < playlistQueue.length
-    ) {
-        playlistQueueIndex++
-        const nextId = playlistQueue[playlistQueueIndex]
-        void loadTrack(nextId)
-            .then(() => startPlayback())
-            .catch((error) => {
-                playlistQueue = []
-                playlistQueueIndex = -1
-                console.error('Falha ao avançar a playlist:', error)
-            })
-        return
-    }
-    playlistQueue = []
-    playlistQueueIndex = -1
-    playbackState.status = 'ended'
-    emitPlaybackState()
-}
-
-const schedulePlayback = (generation: number) => {
-    if (generation !== playbackGeneration || playbackState.status !== 'playing')
-        return
-    const position = playbackPosition()
-    while (
-        playbackState.currentEventIndex < playbackPlan.events.length &&
-        playbackPlan.events[playbackState.currentEventIndex].time <=
-            position + 0.000001
-    ) {
-        const index = playbackState.currentEventIndex++
-        const event = playbackPlan.events[index]
-        void tauri.core.invoke('keyboard_event', {
-            event: {
-                keys: event.keys,
-                hold_ms: Math.max(0, Math.round(event.hold * 1000)),
-            },
-        })
-        for (const listener of eventListeners) listener(event, index)
-    }
-    const next = playbackPlan.events[playbackState.currentEventIndex]
-    if (next)
-        playbackEventTimer = setTimeout(
-            () => schedulePlayback(generation),
-            Math.max(1, ((next.time - position) / playbackState.speed) * 1000),
-        )
-}
-
-const schedulePlaybackTick = (generation: number) => {
-    if (generation !== playbackGeneration || playbackState.status !== 'playing')
-        return
-    playbackState.position = playbackPosition()
-    if (playbackState.position >= playbackState.duration) {
-        finishPlayback()
-        return
-    }
-    emitPlaybackState()
-    playbackTickTimer = setTimeout(() => schedulePlaybackTick(generation), 33)
-}
-
 const loadPlaybackPlan = (plan: PlaybackPlan) => {
-    clearPlaybackTimers()
     countdownGeneration++
     emitCountdown(0)
-    playbackGeneration++
     playbackPlan = plan
     playbackState.status = 'idle'
     playbackState.position = 0
     playbackState.duration = plan.duration
     playbackState.currentEventIndex = 0
     emitPlaybackState()
+    for (const listener of planListeners) listener(plan)
 }
 
 const loadTrack = async (id: string) => {
@@ -196,90 +114,82 @@ const loadTrack = async (id: string) => {
     return plan
 }
 
-const startPlayback = async () => {
+const startPlayback = async (continuePlaylist = false) => {
     if (!playbackPlan.events.length || playbackState.status === 'playing')
         return
     const countdown = ++countdownGeneration
-    for (let remaining = 5; remaining > 0; remaining--) {
-        emitCountdown(remaining)
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-        if (countdown !== countdownGeneration) return
+    if (!continuePlaylist) {
+        for (let remaining = 5; remaining > 0; remaining--) {
+            emitCountdown(remaining)
+            await new Promise((resolve) => setTimeout(resolve, 1000))
+            if (countdown !== countdownGeneration) return
+        }
     }
     emitCountdown(0)
     const armed = await tauri.core.invoke<boolean>('keyboard_arm')
     if (!armed) throw new Error('Não foi possível armar a janela do jogo.')
-    if (
-        playbackState.status === 'ended' ||
-        playbackState.status === 'stopped'
-    ) {
-        playbackState.position = 0
-        playbackState.currentEventIndex = 0
+    await tauri.core.invoke('playback_start')
+}
+
+const pausePlayback = async () => {
+    countdownGeneration++
+    emitCountdown(0)
+    await tauri.core.invoke('playback_pause')
+}
+
+const stopPlayback = async () => {
+    countdownGeneration++
+    emitCountdown(0)
+    await tauri.core.invoke('playback_stop')
+}
+
+const seekPlayback = async (position: number) => {
+    countdownGeneration++
+    emitCountdown(0)
+    await tauri.core.invoke('playback_seek', { position })
+}
+
+const setPlaybackSpeed = (speed: number) =>
+    tauri.core.invoke('playback_set_speed', { speed })
+
+const advancePlaylist = async () => {
+    if (advancingPlaylist || playlistQueueIndex < 0) return
+    if (playlistQueueIndex + 1 >= playlistQueue.length) {
+        playlistQueue = []
+        playlistQueueIndex = -1
+        return
     }
-    playbackState.status = 'playing'
-    playbackStartedAt =
-        performance.now() -
-        (playbackState.position / playbackState.speed) * 1000
-    const generation = ++playbackGeneration
-    emitPlaybackState()
-    schedulePlayback(generation)
-    schedulePlaybackTick(generation)
-}
-
-const pausePlayback = () => {
-    if (playbackState.status !== 'playing') return
-    countdownGeneration++
-    emitCountdown(0)
-    playbackState.position = playbackPosition()
-    playbackState.status = 'paused'
-    clearPlaybackTimers()
-    playbackGeneration++
-    void tauri.core.invoke('keyboard_reset')
-    emitPlaybackState()
-}
-
-const stopPlayback = () => {
-    clearPlaybackTimers()
-    countdownGeneration++
-    emitCountdown(0)
-    playbackGeneration++
-    playbackState.status = 'stopped'
-    playbackState.position = 0
-    playbackState.currentEventIndex = 0
-    void tauri.core.invoke('keyboard_reset')
-    emitPlaybackState()
-}
-
-const seekPlayback = (position: number) => {
-    clearPlaybackTimers()
-    countdownGeneration++
-    emitCountdown(0)
-    playbackGeneration++
-    void tauri.core.invoke('keyboard_reset')
-    playbackState.position = Math.max(
-        0,
-        Math.min(playbackState.duration, Number(position) || 0),
-    )
-    playbackState.currentEventIndex = playbackPlan.events.findIndex(
-        (event) => event.time >= playbackState.position,
-    )
-    if (playbackState.currentEventIndex < 0)
-        playbackState.currentEventIndex = playbackPlan.events.length
-    playbackState.status = 'paused'
-    emitPlaybackState()
-}
-
-const setPlaybackSpeed = (speed: number) => {
-    const next = Math.max(0.1, Math.min(4, Number(speed) || 1))
-    if (playbackState.status === 'playing') {
-        playbackState.position = playbackPosition()
-        playbackStartedAt =
-            performance.now() - (playbackState.position / next) * 1000
-        clearPlaybackTimers()
-        const generation = ++playbackGeneration
-        schedulePlayback(generation)
-        schedulePlaybackTick(generation)
+    advancingPlaylist = true
+    const nextId = playlistQueue[++playlistQueueIndex]
+    try {
+        await loadTrack(nextId)
+        await startPlayback(true)
+    } catch (error) {
+        playlistQueue = []
+        playlistQueueIndex = -1
+        console.error('Falha ao avançar a playlist:', error)
+    } finally {
+        advancingPlaylist = false
     }
-    playbackState.speed = next
+}
+
+const receivePlaybackState = (state: PlaybackState) => {
+    playbackState = state
+    if (state.status === 'playing') countdownRemaining = null
+    emitPlaybackState()
+    if (state.status === 'ended') void advancePlaylist()
+}
+
+const receivePlaybackEvent = (notice: {
+    event: unknown
+    index: number
+    lateByMs?: number
+}) => {
+    playbackState.currentEventIndex = Math.max(
+        playbackState.currentEventIndex,
+        notice.index + 1,
+    )
+    for (const listener of eventListeners) listener(notice.event, notice.index)
     emitPlaybackState()
 }
 
@@ -320,7 +230,11 @@ window.tanzaku = {
             eventListeners.add(listener)
             return () => eventListeners.delete(listener)
         },
-        onPlan: emptyUnsubscribe,
+        onPlan: (listener: (plan: PlaybackPlan) => void) => {
+            planListeners.add(listener)
+            listener(playbackPlan)
+            return () => planListeners.delete(listener)
+        },
         onCountdown: (listener: (value: { remaining: number }) => void) => {
             countdownListeners.add(listener)
             return () => countdownListeners.delete(listener)
@@ -411,6 +325,22 @@ window.tanzaku = {
             }),
     },
 }
+
+void tauri.event
+    .listen<PlaybackState>('playback-state', (event) =>
+        receivePlaybackState(event.payload),
+    )
+    .catch((error) =>
+        console.error('Falha ao ouvir estado da reprodução:', error),
+    )
+void tauri.event
+    .listen<{ event: unknown; index: number; lateByMs?: number }>(
+        'playback-event',
+        (event) => receivePlaybackEvent(event.payload),
+    )
+    .catch((error) =>
+        console.error('Falha ao ouvir eventos da reprodução:', error),
+    )
 
 void tauri.core.invoke('runtime_info').then((value) => {
     console.info(value)
