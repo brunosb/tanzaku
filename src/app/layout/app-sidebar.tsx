@@ -1,5 +1,6 @@
 import { FolderCog, Library, ListMusic, Music2 } from 'lucide-react'
 import { collator } from '@/features/catalog/model/catalog-model'
+import { AppLogo } from '@/shared/ui/app-logo'
 import { Button } from '@/shared/ui/button'
 import {
     Sidebar,
@@ -33,8 +34,12 @@ export function AppSidebar({
     return (
         <Sidebar collapsible="none" className="navigation">
             <SidebarHeader>
-                <button className="brand" onClick={() => navigate('/player')}>
-                    <span className="brand-mark">T</span>
+                <button
+                    className="brand"
+                    aria-label="Tanzaku: abrir tocador"
+                    onClick={() => navigate('/player')}
+                >
+                    <AppLogo className="brand-mark" />
                     <span className="brand-copy">
                         <strong>Tanzaku</strong>
                         <small>Seu espaço musical</small>

@@ -10,6 +10,7 @@ function Progress({
     return (
         <ProgressPrimitive.Root
             data-slot="progress"
+            value={value}
             className={cn(
                 'relative h-2 w-full overflow-hidden rounded-full bg-primary/20',
                 className,
@@ -18,8 +19,15 @@ function Progress({
         >
             <ProgressPrimitive.Indicator
                 data-slot="progress-indicator"
-                className="h-full w-full flex-1 bg-primary transition-all"
-                style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
+                className={cn(
+                    'h-full w-full flex-1 bg-primary transition-all motion-reduce:transition-none',
+                    value == null && 'progress-indeterminate',
+                )}
+                style={
+                    value == null
+                        ? undefined
+                        : { transform: `translateX(-${100 - value}%)` }
+                }
             />
         </ProgressPrimitive.Root>
     )

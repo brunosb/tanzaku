@@ -90,7 +90,25 @@ mod pipeline_tests {
         writer.finalize().unwrap();
         let audio = audio::read_wav(&wav).unwrap();
         let model = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(MODEL_RESOURCE_PATH);
-        let result = transcribe_wav(&model, &audio.samples, &midi).unwrap();
+        let mut updates = Vec::new();
+        let result = transcribe_with_progress(&model, &audio.samples, &midi, |progress| {
+            assert!(!midi.exists(), "progress must precede writing the MIDI");
+            updates.push(progress);
+            Ok(())
+        })
+        .unwrap();
+        let total = match updates[0] {
+            TranscriptionProgress::Inference { done: 0, total } => total,
+            other => panic!("expected inference first, received {other:?}"),
+        };
+        let mut expected: Vec<_> = (0..=total)
+            .map(|done| TranscriptionProgress::Inference { done, total })
+            .collect();
+        expected.extend([
+            TranscriptionProgress::Decoding,
+            TranscriptionProgress::WritingMidi,
+        ]);
+        assert_eq!(updates, expected);
         assert!(result.notes > 0);
         let bytes = std::fs::read(midi).unwrap();
         let notes = crate::music::midi::read_notes(&bytes).unwrap();
@@ -102,10 +120,8 @@ mod pipeline_tests {
         let dir = tempfile::tempdir().unwrap();
         let midi = dir.path().join("canceled.mid");
         let model = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(MODEL_RESOURCE_PATH);
-        let mut calls = 0;
-        let result = transcribe_with_progress(&model, &vec![0.0; 88200], &midi, |_, _| {
-            calls += 1;
-            if calls > 1 {
+        let result = transcribe_with_progress(&model, &vec![0.0; 88200], &midi, |progress| {
+            if matches!(progress, TranscriptionProgress::Inference { done: 1, .. }) {
                 Err("canceled".to_string())
             } else {
                 Ok(())
@@ -113,6 +129,29 @@ mod pipeline_tests {
         });
         assert_eq!(result.unwrap_err(), "canceled");
         assert!(!midi.exists());
+    }
+    #[test]
+    fn cancellation_before_decoder_or_midi_writing_does_not_write_midi() {
+        let model = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(MODEL_RESOURCE_PATH);
+        for cancel_at in [
+            TranscriptionProgress::Decoding,
+            TranscriptionProgress::WritingMidi,
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let midi = dir.path().join("canceled.mid");
+            let mut reached = false;
+            let result = transcribe_with_progress(&model, &vec![0.0; 44100], &midi, |progress| {
+                if progress == cancel_at {
+                    reached = true;
+                    Err("canceled".to_string())
+                } else {
+                    Ok(())
+                }
+            });
+            assert!(reached, "the cancellation point must be reached");
+            assert_eq!(result.unwrap_err(), "canceled");
+            assert!(!midi.exists());
+        }
     }
     #[test]
     fn unwrapping_uses_reference_frame_count() {

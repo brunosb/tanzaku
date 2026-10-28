@@ -53,15 +53,15 @@ button:disabled {
     gap: 9px;
     padding-left: 12px;
 }
+.app-logo {
+    display: block;
+    object-fit: contain;
+    flex: none;
+    user-select: none;
+}
 .window-mark {
-    display: grid;
-    place-items: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 6px;
-    background: var(--primary);
-    color: #211801;
-    font-weight: 800;
+    width: 22px;
+    height: 22px;
 }
 .window-actions {
     display: flex;
@@ -101,15 +101,8 @@ button:disabled {
     background: transparent;
 }
 .brand-mark {
-    display: grid;
-    place-items: center;
-    width: 34px;
-    height: 34px;
-    flex: none;
-    border-radius: 50%;
-    background: var(--primary);
-    color: #211801;
-    font-weight: 800;
+    width: 44px;
+    height: 44px;
 }
 .brand-copy strong,
 .brand-copy small {
@@ -491,6 +484,16 @@ h1 {
     color: var(--muted-foreground);
     font-size: 13px;
 }
+.player-logo {
+    width: 144px;
+    height: 144px;
+}
+@media (max-width: 740px), (max-height: 700px) {
+    .player-logo {
+        width: 96px;
+        height: 96px;
+    }
+}
 .roll-card {
     display: flex;
     min-height: 0;
@@ -839,6 +842,36 @@ h1 {
     margin-top: 18px;
     color: var(--muted-foreground);
     font-size: 12px;
+}
+.conversion-progress strong {
+    color: var(--foreground);
+}
+.conversion-progress-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+.conversion-progress-heading span {
+    white-space: nowrap;
+}
+.progress-indeterminate {
+    width: 40%;
+    animation: progress-indeterminate 1.5s ease-in-out infinite;
+}
+@keyframes progress-indeterminate {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(250%);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .progress-indeterminate {
+        animation: none;
+        transform: translateX(75%);
+    }
 }
 @media (max-width: 1000px) {
     .navigation {

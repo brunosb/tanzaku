@@ -1,4 +1,4 @@
-import { Library, Music2, Upload } from 'lucide-react'
+import { Library, Upload } from 'lucide-react'
 import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { Status } from '@/features/playback/components/status'
 import { type PlaybackContext } from '@/features/playback/model/context'
@@ -7,6 +7,7 @@ import {
     mountPiano,
 } from '@/features/playback/piano-roll/piano-controller'
 import { formatTime } from '@/shared/lib/format-time'
+import { AppLogo } from '@/shared/ui/app-logo'
 import { Button } from '@/shared/ui/button'
 export function Player({
     runtime,
@@ -34,7 +35,7 @@ export function Player({
             </header>
             {!meta.plan.events.length && (
                 <div className="player-empty">
-                    <Music2 size={30} />
+                    <AppLogo className="player-logo" />
                     <p>Escolha uma música para visualizar suas notas.</p>
                     <div className="actions">
                         <Button onClick={() => runtime.navigate('/library')}>

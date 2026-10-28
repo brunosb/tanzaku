@@ -43,6 +43,13 @@ pub struct MidiTranscriptionSummary {
     pub midi_path: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TranscriptionProgress {
+    Inference { done: usize, total: usize },
+    Decoding,
+    WritingMidi,
+}
+
 pub fn inspect_for_app(app: &tauri::AppHandle) -> Result<ModelInfo, String> {
     let path = locate_model(app)?;
     inspect_model(&path)
@@ -71,7 +78,7 @@ pub fn transcribe_wav_cancellable(
     app: &tauri::AppHandle,
     wav: &Path,
     midi: &Path,
-    progress: impl FnMut(usize, usize) -> Result<(), String>,
+    progress: impl FnMut(TranscriptionProgress) -> Result<(), String>,
 ) -> Result<MidiTranscriptionSummary, String> {
     let model = locate_model(app)?;
     let audio = audio::read_wav(wav)?;
@@ -82,13 +89,13 @@ fn transcribe_wav(
     samples: &[f32],
     midi_path: &Path,
 ) -> Result<MidiTranscriptionSummary, String> {
-    transcribe_with_progress(model_path, samples, midi_path, |_, _| Ok(()))
+    transcribe_with_progress(model_path, samples, midi_path, |_| Ok(()))
 }
 fn transcribe_with_progress(
     model_path: &Path,
     samples: &[f32],
     midi_path: &Path,
-    mut progress: impl FnMut(usize, usize) -> Result<(), String>,
+    mut progress: impl FnMut(TranscriptionProgress) -> Result<(), String>,
 ) -> Result<MidiTranscriptionSummary, String> {
     use ndarray::Array3;
     use ort::value::TensorRef;
@@ -119,7 +126,10 @@ fn transcribe_with_progress(
 
     let total = padded.len().div_ceil(HOP);
     for (window_index, start) in (0..padded.len()).step_by(HOP).enumerate() {
-        progress(window_index, total)?;
+        progress(TranscriptionProgress::Inference {
+            done: window_index,
+            total,
+        })?;
         let mut window = vec![0.0_f32; WINDOW];
         let end = (start + WINDOW).min(padded.len());
         window[..end - start].copy_from_slice(&padded[start..end]);
@@ -156,7 +166,8 @@ fn transcribe_with_progress(
         );
     }
 
-    progress(total, total)?;
+    progress(TranscriptionProgress::Inference { done: total, total })?;
+    progress(TranscriptionProgress::Decoding)?;
     let note = unwrap_windows(&note_windows, OUTPUT_FRAMES, OUTPUT_COLS, samples.len());
     let onset = unwrap_windows(&onset_windows, OUTPUT_FRAMES, OUTPUT_COLS, samples.len());
     let contour = unwrap_windows(&contour_windows, OUTPUT_FRAMES, 264, samples.len());
@@ -168,13 +179,13 @@ fn transcribe_with_progress(
     let decode_started = std::time::Instant::now();
     let mut notes = crate::transcription::decoder::decode_notes(&note, &onset, frames);
     crate::transcription::decoder::add_pitch_bends(&mut notes, &contour, frames);
-    progress(total, total)?;
     eprintln!(
         "Decoder: {:.2} ms, {} notas",
         decode_started.elapsed().as_secs_f64() * 1000.0,
         notes.len()
     );
     let write_started = std::time::Instant::now();
+    progress(TranscriptionProgress::WritingMidi)?;
     crate::transcription::decoder::write_midi(midi_path, &notes)?;
     eprintln!(
         "Gravação MIDI: {:.2} ms",

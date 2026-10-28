@@ -54,7 +54,11 @@ export type Snapshot = {
     track: Track | null
     plan: PlaybackPlan
 }
-export type YoutubeProgress = { jobId: string; stage: string; percent: number }
+export type YoutubeProgress = {
+    jobId: string
+    stage: string
+    percent: number | null
+}
 type Subscription<T> = (listener: (value: T) => void) => () => void
 export type TanzakuApi = {
     ready: Promise<void>

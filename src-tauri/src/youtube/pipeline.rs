@@ -53,7 +53,7 @@ pub fn add_youtube(
         let ffmpeg = tool_path(app, "ffmpeg.exe")?;
         run(&job, &ffmpeg, &["-version"])
             .map_err(|error| format!("O FFmpeg selecionado não pôde ser executado: {error}"))?;
-        job.progress(app, "Obtendo informações do vídeo", 0.0);
+        job.progress(app, "Obtendo informações do vídeo", None);
         let metadata = run(
             &job,
             &yt_dlp,
@@ -73,7 +73,7 @@ pub fn add_youtube(
             title
         };
 
-        job.progress(app, "Baixando áudio", 0.0);
+        job.progress(app, "Baixando áudio", None);
         let pattern = root.join("audio.%(ext)s");
         let pattern = pattern.to_string_lossy().into_owned();
         run(
@@ -91,7 +91,7 @@ pub fn add_youtube(
         )?;
         let source_audio = find_downloaded_audio(root)?;
 
-        job.progress(app, "Convertendo para WAV", 0.0);
+        job.progress(app, "Convertendo para WAV", None);
         let wav = root.join("audio.wav");
         let source_audio = source_audio.to_string_lossy().into_owned();
         let wav_text = wav.to_string_lossy().into_owned();
@@ -111,28 +111,35 @@ pub fn add_youtube(
             ],
         )?;
 
-        job.progress(app, "Transcrevendo para MIDI", 0.0);
+        job.progress(app, "Transcrevendo para MIDI", None);
         let midi = root.join("transcribed.mid");
-        let summary =
-            transcription::transcribe_wav_cancellable(app, &wav, &midi, |done, total| {
-                job.check()?;
-                job.progress(
-                    app,
+        let summary = transcription::transcribe_wav_cancellable(app, &wav, &midi, |progress| {
+            job.check()?;
+            let (stage, percent) = match progress {
+                transcription::TranscriptionProgress::Inference { done, total } => (
                     "Transcrevendo para MIDI",
-                    done as f64 / total.max(1) as f64 * 100.0,
-                );
-                Ok(())
-            })?;
+                    Some(done as f64 / total.max(1) as f64 * 100.0),
+                ),
+                transcription::TranscriptionProgress::Decoding => ("Decodificando notas", None),
+                transcription::TranscriptionProgress::WritingMidi => {
+                    ("Gravando arquivo MIDI", None)
+                }
+            };
+            job.progress(app, stage, percent);
+            Ok(())
+        })?;
         if summary.notes == 0 {
             return Err("Não foram detectadas notas no áudio.".to_string());
         }
+        job.check()?;
+        job.progress(app, "Salvando na biblioteca", None);
         let _guard = storage::transaction()?;
         job.check()?;
         if storage::storage_root()? != expected_root {
             return Err("A pasta mudou; conversão cancelada.".to_string());
         }
         let entry = storage::save_transcribed_midi(&midi, title, source_url)?;
-        job.progress(app, "Concluído", 100.0);
+        job.progress(app, "Concluído", Some(100.0));
         Ok(entry)
     })();
     result

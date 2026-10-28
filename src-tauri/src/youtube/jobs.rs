@@ -79,7 +79,7 @@ impl Job {
             Ok(())
         }
     }
-    pub(super) fn progress(&self, app: &AppHandle, stage: &str, percent: f64) {
+    pub(super) fn progress(&self, app: &AppHandle, stage: &str, percent: Option<f64>) {
         let _ = app.emit(
             "youtube-progress",
             serde_json::json!({"jobId":self.id,"stage":stage,"percent":percent}),
