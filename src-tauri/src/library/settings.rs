@@ -22,7 +22,10 @@ pub(crate) fn pointer_roots() -> Vec<PathBuf> {
         return vec![PathBuf::from(root)];
     }
     let mut roots = Vec::new();
-    for base in [dirs::data_local_dir(), dirs::data_dir(), dirs::config_dir()].into_iter().flatten() {
+    for base in [dirs::data_local_dir(), dirs::data_dir(), dirs::config_dir()]
+        .into_iter()
+        .flatten()
+    {
         let root = base.join("Tanzaku");
         if !roots.contains(&root) {
             roots.push(root);

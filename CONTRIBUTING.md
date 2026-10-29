@@ -21,7 +21,19 @@ fix(catalog): reset pagination after filtering
 docs: explain administrator requirements
 ```
 
-Tipos aceitos: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `ci`, `build`, `perf` e `revert`. Use `!` ou um rodapé `BREAKING CHANGE:` para incompatibilidades. O título da PR também deve seguir esse formato.
+Tipos aceitos: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `ci`, `build`, `perf`, `revert` e `style`. Use `!` ou um rodapé `BREAKING CHANGE:` para incompatibilidades. O título da PR também deve seguir esse formato.
+
+`npm ci` instala os hooks do Husky automaticamente. Continue usando `git commit` ou o IDE normalmente: o Commitlint valida a mensagem antes de criar o commit. O cabeçalho aceita até **1.000 caracteres**; corpo e rodapé podem ter explicações extensas, sem restrição de comprimento das linhas. Português e inglês são aceitos.
+
+Se a mensagem for rejeitada, corrija o tipo ou a descrição e tente novamente. Para validar o histórico da sua branch manualmente:
+
+```powershell
+npm run commitlint -- --from origin/main --to HEAD --verbose
+```
+
+O CI valida o título e todos os commits da PR usando a mesma configuração. O CI usa `HUSKY=0` para não instalar hooks e executa Commitlint explicitamente. `npm run test:commitlint` verifica os limites de tamanho e mensagens válidas/inválidas.
+
+Enviar um commit novo para a branch de uma PR dispara o Action automaticamente. Para repetir a mesma execução sem mudar código, abra Actions, selecione a execução e use **Re-run failed jobs**. Corrija a causa da falha antes de repetir. `npm run test:rust` prepara a interface antes do Cargo para funcionar também em um checkout limpo.
 
 Não aumente a versão manualmente em uma PR comum. O Release Please prepara a PR de versão com changelog e lockfiles sincronizados; o proprietário revisa e mescla. Consulte [docs/releases.md](docs/releases.md).
 

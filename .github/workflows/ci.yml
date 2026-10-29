@@ -16,6 +16,9 @@ on:
 permissions:
   contents: read
 
+env:
+  HUSKY: '0'
+
 concurrency:
   group: ci-${{ github.ref }}-${{ inputs.release_tag || 'validate' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -30,6 +33,7 @@ jobs:
         with:
           lfs: true
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
@@ -40,12 +44,30 @@ jobs:
         with:
           workspaces: src-tauri -> target
       - run: npm ci
-      - name: Validate Conventional Commit PR title
+      - name: Validate PR title with Commitlint
         if: github.event_name == 'pull_request'
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          node -e "if(!/^(feat|fix|docs|chore|refactor|test|ci|build|perf|revert)(\([^)]+\))?!?: .+/.test(process.env.PR_TITLE))process.exit(1)"
+          $env:PR_TITLE | npm run commitlint -- --verbose
+      - name: Validate PR commits
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: npm run commitlint -- --from "$env:BASE_SHA" --to "$env:HEAD_SHA" --verbose
+      - name: Validate pushed commits
+        if: github.event_name == 'push'
+        env:
+          BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: npm run commitlint -- --from "$env:BASE_SHA" --to "$env:HEAD_SHA" --verbose
+      - name: Validate manually dispatched branch commits
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: npm run commitlint -- --from origin/main --to HEAD --verbose
+      - name: Validate latest main commit on manual runs
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        run: npm run commitlint -- --last --verbose
       - run: npm test
       - run: npm run tauri:build
       - run: npm run test:installer
