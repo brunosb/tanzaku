@@ -86,6 +86,11 @@ module.exports = async function playbackQueueSmoke({
         assert(layout.bottom <= layout.height + 1)
         assert(layout.bars >= 48 && layout.bars <= 240)
         assert.equal(layout.chartHeight, height <= 700 ? 28 : 40)
+        if (width === 900 && height === 920) {
+            const roll = await evaluate('(()=>{const s=document.querySelector(".roll-scroll"),last=document.querySelector("[data-lane=U]");return {client:s.clientHeight,scroll:s.scrollHeight,bottom:last.getBoundingClientRect().bottom,viewport:s.getBoundingClientRect().top+s.clientHeight}})()')
+            assert(roll.scroll <= roll.client + 1, 'All 21 lanes must fit at the initial window size')
+            assert(roll.bottom <= roll.viewport + 1, 'Last piano lane must be visible')
+        }
         const shot = await send('Page.captureScreenshot', { format: 'png' })
         fs.writeFileSync(
             path.join(artifacts, name + '.png'),

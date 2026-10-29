@@ -586,7 +586,7 @@ h1 {
 }
 .lane-row {
     display: flex;
-    height: clamp(18px, 2.2vh, 24px);
+    height: var(--lane-height, 18px);
     border-top: 1px solid #ffffff0a;
 }
 .lane-label {
@@ -626,8 +626,8 @@ h1 {
     position: absolute;
     display: flex;
     align-items: center;
-    top: 3px;
-    height: calc(100% - 6px);
+    top: 1px;
+    height: calc(100% - 2px);
     min-width: 0;
     padding: 0 3px;
     overflow: hidden;
