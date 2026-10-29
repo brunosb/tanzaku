@@ -97,7 +97,7 @@ O instalador fica em `src-tauri/target/release/bundle/nsis`. Testes desktop usam
 | `test` / `tools` | Regressões, fixtures, build e smoke |
 | `specs` | Arquitetura e critérios de aceitação |
 
-Os dados ficam na pasta Tanzaku de dados do usuário do Windows ou na pasta escolhida em Armazenamento. `TANZAKU_DATA_DIR` isola os dados de desenvolvimento. Excluir da biblioteca remove o MIDI e seus vínculos após confirmação; remover de uma playlist preserva o arquivo.
+Em instalações novas, os dados ficam em `%LOCALAPPDATA%\Tanzaku`, junto à instalação por usuário, ou na pasta escolhida em Armazenamento. Escolhas e dados de instalações anteriores continuam compatíveis. `TANZAKU_DATA_DIR` isola os dados de desenvolvimento. Excluir da biblioteca remove o MIDI e seus vínculos após confirmação; remover de uma playlist preserva o arquivo.
 
 Uma conversão do YouTube executa por vez. Para diagnóstico, `TANZAKU_FFMPEG`, `TANZAKU_YTDLP` e `TANZAKU_BASIC_PITCH_MODEL` aceitam caminhos alternativos. As fixtures automatizadas não exigem Python; sua regeneração é uma tarefa separada.
 

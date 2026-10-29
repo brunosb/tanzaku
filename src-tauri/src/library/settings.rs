@@ -10,7 +10,8 @@ pub(crate) fn set_storage_root(root: PathBuf) {
 }
 
 fn default_storage_root() -> PathBuf {
-    dirs::data_dir()
+    dirs::data_local_dir()
+        .or_else(dirs::data_dir)
         .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
         .join("Tanzaku")
 }
@@ -21,7 +22,7 @@ pub(crate) fn pointer_roots() -> Vec<PathBuf> {
         return vec![PathBuf::from(root)];
     }
     let mut roots = Vec::new();
-    for base in [dirs::data_dir(), dirs::config_dir()].into_iter().flatten() {
+    for base in [dirs::data_local_dir(), dirs::data_dir(), dirs::config_dir()].into_iter().flatten() {
         let root = base.join("Tanzaku");
         if !roots.contains(&root) {
             roots.push(root);
