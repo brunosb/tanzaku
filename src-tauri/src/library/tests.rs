@@ -39,6 +39,24 @@ impl Drop for Scope {
         *SELECTED_ROOT.lock().unwrap() = self.previous.take();
     }
 }
+
+#[test]
+fn auto_advance_preference_roundtrips_without_overwriting_other_settings_or_invalid_json() {
+    let scope = Scope::new();
+    assert!(!read_settings().unwrap()["autoAdvanceEnabled"]
+        .as_bool()
+        .unwrap_or(false));
+    write_settings_at(scope.dir.path(), serde_json::json!({ "other": 42 })).unwrap();
+    write_auto_advance(true).unwrap();
+    assert_eq!(read_settings().unwrap()["autoAdvanceEnabled"], true);
+    assert_eq!(read_settings().unwrap()["other"], 42);
+    write_auto_advance(false).unwrap();
+    assert_eq!(read_settings().unwrap()["autoAdvanceEnabled"], false);
+    let file = scope.dir.path().join("settings.json");
+    fs::write(&file, b"{broken").unwrap();
+    assert!(write_auto_advance(true).is_err());
+    assert_eq!(fs::read(file).unwrap(), b"{broken");
+}
 #[test]
 fn rename_preserves_playlist_id_and_reimport_has_new_id() {
     let scope = Scope::new();

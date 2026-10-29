@@ -76,6 +76,13 @@ export function harness(size = 65) {
                         return { storageRoot: 'C:/isolated' }
                     case 'playback_get_snapshot':
                         return structuredClone(snapshot)
+                    case 'playback_set_auto_advance':
+                        snapshot.state.autoAdvanceEnabled = Boolean(
+                            args.enabled,
+                        )
+                        snapshot.state.sequence++
+                        emit('playback-state', structuredClone(snapshot.state))
+                        return undefined
                     case 'playback_load': {
                         const e = entries.find((e) => e.id === id)!
                         const context = args.context as

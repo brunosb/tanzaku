@@ -1,4 +1,5 @@
 import {
+    ListEnd,
     Music2,
     Pause,
     Play,
@@ -228,11 +229,32 @@ export function Transport({ runtime }: { runtime: PlaybackContext }) {
                         <Square size={15} />
                     </Control>
                     <Control
+                        id="auto-advance-toggle"
+                        label="Avanço automático"
+                        size="icon"
+                        variant="ghost"
+                        aria-pressed={state.autoAdvanceEnabled}
+                        className={
+                            state.autoAdvanceEnabled ? 'repeat-active' : ''
+                        }
+                        onClick={() =>
+                            run(
+                                runtime.api.playback.setAutoAdvance(
+                                    !state.autoAdvanceEnabled,
+                                ),
+                            )
+                        }
+                    >
+                        <ListEnd />
+                    </Control>
+                    <Control
                         id="repeat-toggle"
                         label={
                             state.repeatEnabled
                                 ? 'Desativar repetição'
-                                : 'Repetir fila'
+                                : state.autoAdvanceEnabled
+                                  ? 'Repetir fila'
+                                  : 'Repetir música'
                         }
                         size="icon"
                         variant="ghost"

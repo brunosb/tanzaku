@@ -20,6 +20,7 @@ pub fn run() {
             commands::playback::playback_previous,
             commands::playback::playback_next,
             commands::playback::playback_set_shuffle,
+            commands::playback::playback_set_auto_advance,
             commands::playback::playback_start,
             commands::playback::playback_pause,
             commands::playback::playback_stop,

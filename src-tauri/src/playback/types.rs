@@ -24,6 +24,7 @@ pub struct PlaybackState {
     pub active_event_indices: Vec<usize>,
     pub countdown_remaining: u32,
     pub repeat_enabled: bool,
+    pub auto_advance_enabled: bool,
     pub pause_reason: Option<String>,
     pub error: Option<String>,
 }
@@ -40,6 +41,7 @@ impl Default for PlaybackState {
             active_event_indices: vec![],
             countdown_remaining: 0,
             repeat_enabled: false,
+            auto_advance_enabled: false,
             pause_reason: None,
             error: None,
         }

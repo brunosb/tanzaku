@@ -21,6 +21,7 @@ pub(super) struct Model {
     pub(super) renamed_tracks: std::collections::HashMap<String, String>,
     pub(super) renamed_playlists: std::collections::HashMap<String, String>,
     pub(super) pending: bool,
+    pub(super) automatic_pending: bool,
     pub(super) last_emit: Instant,
     pub(super) samples: Vec<TimingSample>,
 }
@@ -39,6 +40,7 @@ impl Model {
             renamed_tracks: Default::default(),
             renamed_playlists: Default::default(),
             pending: false,
+            automatic_pending: false,
             last_emit: now,
             samples: vec![],
         }
@@ -69,6 +71,7 @@ impl Model {
     pub(super) fn cancel(&mut self) {
         self.token = self.token.wrapping_add(1);
         self.pending = false;
+        self.automatic_pending = false;
         self.countdown = None;
         self.state.countdown_remaining = 0;
     }
@@ -142,6 +145,17 @@ impl Model {
         };
     }
     pub(super) fn next(&self) -> Option<(String, Option<Queue>)> {
+        if !self.state.auto_advance_enabled {
+            return self
+                .state
+                .repeat_enabled
+                .then(|| {
+                    self.track
+                        .as_ref()
+                        .map(|track| (track.id.clone(), self.queue.clone()))
+                })
+                .flatten();
+        }
         // Commit the queue cursor only after the prepared track is installed.
         if let Some(queue) = &self.queue {
             let next = queue.step(true, self.state.repeat_enabled)?;

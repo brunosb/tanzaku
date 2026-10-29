@@ -193,6 +193,8 @@ export function createBridge(tauri: TauriGlobal): TanzakuApi {
             next: () => invoke('playback_next'),
             setShuffle: (enabled) =>
                 invoke('playback_set_shuffle', { enabled }),
+            setAutoAdvance: (enabled) =>
+                invoke('playback_set_auto_advance', { enabled }),
             play: () => invoke('playback_start'),
             pause: () => invoke('playback_pause'),
             stop: () => invoke('playback_stop'),

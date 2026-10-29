@@ -37,6 +37,10 @@ pub(super) fn run_worker(
     config: WorkerConfig,
 ) {
     let mut m = Model::new(Instant::now());
+    match &config.auto_advance {
+        Ok(enabled) => m.state.auto_advance_enabled = *enabled,
+        Err(error) => m.state.error = Some(error.clone()),
+    }
     let mut k = Keyboard::new(device);
     let mut waiter = PreciseWaiter::new();
     let mut previous_keys = (false, false);
@@ -62,6 +66,7 @@ pub(super) fn run_worker(
                         continue;
                     }
                     m.pending = false;
+                    m.automatic_pending = false;
                     let result = result.and_then(|p| {
                         release(&mut m, &mut k, start != StartMode::Continue)?;
                         m.install(p);
@@ -224,6 +229,14 @@ pub(super) fn run_worker(
                             Action::Repeat => {
                                 m.state.repeat_enabled = !m.state.repeat_enabled;
                                 plan_changed = true;
+                            }
+                            Action::AutoAdvance(enabled) => {
+                                m.state.auto_advance_enabled = enabled;
+                                if !enabled && m.automatic_pending {
+                                    m.cancel();
+                                    m.state.status = PlaybackStatus::Ended;
+                                    release(&mut m, &mut k, true)?;
+                                }
                             }
                             Action::Shuffle(enabled) => {
                                 m.shuffle_enabled = enabled;
@@ -415,6 +428,7 @@ pub(super) fn run_worker(
                 if let Some((id, queue)) = m.next() {
                     m.cancel();
                     m.pending = true;
+                    m.automatic_pending = true;
                     m.state.status = PlaybackStatus::Loading;
                     load(
                         &sender,

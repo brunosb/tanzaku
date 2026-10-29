@@ -1,8 +1,23 @@
+use super::blocking;
 use super::control;
 use crate::{
     music::types,
     playback::{Action, PlaybackController, QueueInput, Snapshot},
 };
+
+#[tauri::command]
+pub(crate) async fn playback_set_auto_advance(
+    enabled: bool,
+    controller: tauri::State<'_, PlaybackController>,
+) -> Result<(), String> {
+    let controller = controller.inner().clone();
+    blocking(move || {
+        let _guard = crate::library::transaction()?;
+        crate::library::write_auto_advance(enabled)?;
+        controller.request(Action::AutoAdvance(enabled)).map(|_| ())
+    })
+    .await
+}
 #[tauri::command]
 pub(crate) async fn playback_load(
     id: String,

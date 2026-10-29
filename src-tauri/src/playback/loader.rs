@@ -13,12 +13,19 @@ pub(super) type Loader = std::sync::Arc<dyn Fn(LoadSpec) -> Result<Prepared, Str
 pub(super) struct WorkerConfig {
     pub(super) countdown: Duration,
     pub(super) loader: Loader,
+    pub(super) auto_advance: Result<bool, String>,
 }
 impl Default for WorkerConfig {
     fn default() -> Self {
         Self {
             countdown: Duration::from_secs(5),
             loader: std::sync::Arc::new(prepare),
+            auto_advance: (|| {
+                let _guard = storage::transaction()?;
+                Ok(storage::read_settings()?["autoAdvanceEnabled"]
+                    .as_bool()
+                    .unwrap_or(false))
+            })(),
         }
     }
 }

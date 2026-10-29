@@ -62,6 +62,10 @@ pub(crate) fn set_directory(
     }
 
     storage::set_storage_root(root.clone());
+    let enabled = storage::read_settings()?["autoAdvanceEnabled"]
+        .as_bool()
+        .unwrap_or(false);
+    controller.request(Action::AutoAdvance(enabled))?;
     Ok(Some(root.to_string_lossy().into_owned()))
 }
 

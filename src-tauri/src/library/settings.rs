@@ -89,3 +89,9 @@ pub(crate) fn write_settings_at(
     settings["storageRoot"] = serde_json::json!(root.to_string_lossy());
     save_json(&root.join("settings.json"), &settings)
 }
+
+pub(crate) fn write_auto_advance(enabled: bool) -> Result<(), String> {
+    let mut settings = read_settings()?;
+    settings["autoAdvanceEnabled"] = serde_json::json!(enabled);
+    write_settings_at(&storage_root()?, settings)
+}

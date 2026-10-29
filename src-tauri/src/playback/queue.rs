@@ -70,7 +70,9 @@ impl Queue {
             return None;
         }
         if !forward {
-            if self.tracks.len() == 1 { return None; }
+            if self.tracks.len() == 1 {
+                return None;
+            }
             return self
                 .index
                 .checked_sub(1)
@@ -88,7 +90,9 @@ impl Queue {
 
     pub(super) fn step(&self, forward: bool, repeat: bool) -> Option<Self> {
         self.destination(forward, repeat)?;
-        if self.tracks.len() == 1 { return Some(self.clone()); }
+        if self.tracks.len() == 1 {
+            return Some(self.clone());
+        }
         let mut next = self.clone();
         if forward {
             if next.index + 1 == next.ids.len() {

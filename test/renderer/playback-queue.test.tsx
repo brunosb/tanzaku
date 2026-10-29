@@ -9,6 +9,22 @@ const disposers: (() => void)[] = []
 afterEach(() => {
     for (const dispose of disposers.splice(0)) dispose()
 })
+
+test('auto advance reflects confirmed native state and does not change after a failed save', async () => {
+    const h = await mount('/library', 8)
+    const toggle = screen.getByRole('button', { name: 'Avanço automático' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    await h.user.click(toggle)
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-pressed', 'true'))
+    expect(h.calls.at(-1)).toEqual({
+        command: 'playback_set_auto_advance',
+        args: { enabled: true },
+    })
+    h.fail('playback_set_auto_advance')
+    await h.user.click(toggle)
+    await screen.findByText(/Falha de gravação simulada/)
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+})
 async function mount(path = '/library', count = 65) {
     window.location.hash = path
     const h = harness(count)

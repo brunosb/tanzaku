@@ -79,6 +79,7 @@ impl Harness {
                 WorkerConfig {
                     countdown: Duration::ZERO,
                     loader,
+                    auto_advance: Ok(false),
                 },
             )
         });
@@ -180,6 +181,7 @@ fn playlist_continues_without_countdown_or_rearming() {
         }
         LoadSpec::Track(id) | LoadSpec::Context(id, _, _) => Ok(prepared(&id, 0.0, 10.0)),
     }));
+    h.controller.request(Action::AutoAdvance(true)).unwrap();
     h.controller
         .request(Action::Playlist("p".into(), false))
         .unwrap();
@@ -242,6 +244,7 @@ fn pausing_pending_transition_does_not_skip_next_track_on_resume() {
             Ok(prepared(&id, 0.0, 10.0))
         }
     }));
+    h.controller.request(Action::AutoAdvance(true)).unwrap();
     h.controller
         .request(Action::Playlist("p".into(), false))
         .unwrap();
@@ -274,6 +277,7 @@ fn playlist_edits_apply_only_to_the_next_execution() {
         }
         LoadSpec::Track(id) | LoadSpec::Context(id, _, _) => Ok(prepared(&id, 0.0, 10.0)),
     }));
+    h.controller.request(Action::AutoAdvance(true)).unwrap();
     h.controller
         .request(Action::Playlist("p".into(), false))
         .unwrap();
@@ -281,6 +285,7 @@ fn playlist_edits_apply_only_to_the_next_execution() {
     *saved.lock().unwrap() = vec!["c".into(), "a".into(), "b".into()];
     h.wait(|n| matches!(n,Notice::Plan(s)if s.track.as_ref().is_some_and(|t|t.id=="b")));
     h.controller.request(Action::Stop).unwrap();
+    h.controller.request(Action::AutoAdvance(true)).unwrap();
     h.controller
         .request(Action::Playlist("p".into(), false))
         .unwrap();
@@ -313,6 +318,70 @@ fn library_loader() -> Loader {
         }
         Ok(p)
     })
+}
+
+#[test]
+fn default_policy_ends_without_advancing_and_releases_keys() {
+    let h = Harness::new(Arc::new(|_| {
+        let mut p = prepared("a", 0.0, 0.02);
+        p.queue = Some(test_queue(vec!["a".into(), "b".into()]));
+        Ok(p)
+    }));
+    h.controller
+        .request(Action::Load("a".into(), None))
+        .unwrap();
+    h.controller.request(Action::Play).unwrap();
+    h.wait(|n| matches!(n, Notice::State(s) if s.status == PlaybackStatus::Ended));
+    let current = h.controller.request(Action::Snapshot).unwrap();
+    assert!(!current.state.auto_advance_enabled);
+    assert_eq!(current.track.unwrap().id, "a");
+    assert_eq!(current.queue.unwrap().index, 0);
+    assert!(current.state.active_event_indices.is_empty());
+}
+
+#[test]
+fn disabling_auto_advance_cancels_pending_transition_without_committing_cursor() {
+    let (gate, wait) = mpsc::channel();
+    let wait = Mutex::new(wait);
+    let h = Harness::new(Arc::new(move |spec| match spec {
+        LoadSpec::Playlist(_, _) => {
+            let mut p = prepared("a", 0.0, 0.02);
+            p.queue = Some(test_queue(vec!["a".into(), "b".into()]));
+            Ok(p)
+        }
+        _ => {
+            wait.lock().unwrap().recv().unwrap();
+            Ok(prepared("b", 0.0, 10.0))
+        }
+    }));
+    h.controller.request(Action::AutoAdvance(true)).unwrap();
+    h.controller
+        .request(Action::Playlist("p".into(), false))
+        .unwrap();
+    h.wait(|n| matches!(n, Notice::State(s) if s.status == PlaybackStatus::Loading && s.generation == 1));
+    let ended = h.controller.request(Action::AutoAdvance(false)).unwrap();
+    assert_eq!(ended.state.status, PlaybackStatus::Ended);
+    assert_eq!(ended.track.unwrap().id, "a");
+    assert_eq!(ended.queue.unwrap().index, 0);
+    gate.send(()).unwrap();
+    let next = h.controller.enqueue(Action::Next).unwrap();
+    gate.send(()).unwrap();
+    assert_eq!(
+        next.recv_timeout(Duration::from_secs(2))
+            .unwrap()
+            .unwrap()
+            .track
+            .unwrap()
+            .id,
+        "b"
+    );
+    assert!(
+        !h.controller
+            .request(Action::Snapshot)
+            .unwrap()
+            .state
+            .auto_advance_enabled
+    );
 }
 
 #[test]
