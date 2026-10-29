@@ -14,6 +14,8 @@ Antes do merge da PR de versão, ainda não há tag ou release para download. Es
 
 A configuração usa versão inicial `1.0.0`, manifesto inicialmente vazio e o commit anterior a essa entrega como limite do primeiro changelog. O identificador Tauri foi preservado para compatibilidade com instalações existentes.
 
+`force-tag-creation: true` cria a tag mesmo enquanto a release está em rascunho. Assim o job de publicação consegue fazer checkout de `vX.Y.Z` para compilar e validar o instalador antes de publicar o download.
+
 O JSON do Tauri usa `expand: always` no Biome, compatível com a serialização feita pelo Release Please. A validação de formatação continua ativa e não bloqueia PRs de versão por diferenças na expansão dos arrays.
 
 ## GitHub
