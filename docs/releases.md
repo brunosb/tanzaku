@@ -10,7 +10,13 @@ O Tanzaku usa SemVer e Conventional Commits, começando em `1.0.0`: `fix` gera p
 4. O proprietário mescla a PR de versão após o CI. Releases futuras não têm auto merge.
 5. Release Please cria a tag `vX.Y.Z` e um rascunho. O job `publish` compila o commit da tag, instala e testa o app, anexa o `.exe` e `SHA256SUMS.txt` e publica o rascunho.
 
+Antes do merge da PR de versão, ainda não há tag ou release para download. Essa PR é criada pelo bot do GitHub Actions através do Release Please. Após o merge, aguarde o workflow da `main` terminar; o instalador aparecerá nos assets da release. Enquanto isso, builds validados podem ser baixados no artifact `windows-validation` da execução do CI, na aba Actions.
+
 A configuração usa versão inicial `1.0.0`, manifesto inicialmente vazio e o commit anterior a essa entrega como limite do primeiro changelog. O identificador Tauri foi preservado para compatibilidade com instalações existentes.
+
+`force-tag-creation: true` cria a tag mesmo enquanto a release está em rascunho. Assim o job de publicação consegue fazer checkout de `vX.Y.Z` para compilar e validar o instalador antes de publicar o download.
+
+O JSON do Tauri usa `expand: always` no Biome, compatível com a serialização feita pelo Release Please. A validação de formatação continua ativa e não bloqueia PRs de versão por diferenças na expansão dos arrays.
 
 ## GitHub
 

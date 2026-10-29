@@ -48,6 +48,14 @@
             "formatter": {
                 "enabled": false
             }
+        },
+        {
+            "includes": ["src-tauri/tauri.conf.json"],
+            "json": {
+                "formatter": {
+                    "expand": "always"
+                }
+            }
         }
     ]
 }
