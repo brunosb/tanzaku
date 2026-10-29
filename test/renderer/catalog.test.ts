@@ -68,9 +68,22 @@ test('ten thousand tracks are filtered and only one page is returned', () => {
         query: 'CANCAO 99',
     })
     expect(result).toHaveLength(111)
-    expect(paginate(result, 1).items).toHaveLength(50)
+    expect(paginate(result, 1).items).toHaveLength(20)
     expect(performance.now() - start).toBeLessThan(250)
 })
+
+test.each([0, 1, 20, 21, 41])(
+    'pagination clamps pages and returns at most 20 of %i entries',
+    (size) => {
+        const entries = Array.from({ length: size }, (_, id) => id)
+        const first = paginate(entries, 1)
+        const last = paginate(entries, 999)
+        expect(first.items).toEqual(entries.slice(0, 20))
+        expect(last.page).toBe(Math.max(1, Math.ceil(size / 20)))
+        expect(last.items).toEqual(entries.slice((last.page - 1) * 20))
+        expect(paginate(entries, 0)).toEqual(first)
+    },
+)
 test('bulk playlist IPC uses exact camelCase and never sends transport commands', async () => {
     const h = harness()
     await h.api.ready

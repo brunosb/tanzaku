@@ -17,13 +17,9 @@ import {
     SearchField,
 } from '@/features/catalog/components/catalog-controls'
 import { Tracks } from '@/features/catalog/components/tracks'
-import {
-    collator,
-    normalize,
-    paginate,
-} from '@/features/catalog/model/catalog-model'
+import { collator, normalize } from '@/features/catalog/model/catalog-model'
 import { type CatalogProps } from '@/features/catalog/model/dialog-actions'
-import { useCatalog, useView } from '@/features/catalog/model/hooks'
+import { useCatalog, usePage, useView } from '@/features/catalog/model/hooks'
 import { type Playlist } from '@/shared/api/contracts'
 import { run } from '@/shared/lib/report-error'
 import { Button } from '@/shared/ui/button'
@@ -59,7 +55,7 @@ export function PlaylistPage({
                 collator.compare(a.title, b.title) *
                 (view.sort === 'name-desc' ? -1 : 1),
         )
-    const page = paginate(rows, view.page)
+    const page = usePage(rows, view, update)
     const selected = view.selected.filter((id) =>
         playlist.trackIds.includes(id),
     )

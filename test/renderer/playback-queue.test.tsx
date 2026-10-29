@@ -40,16 +40,16 @@ test('library opening sends the full filtered order across pages and fallback op
     await screen.findByRole('button', { name: 'Música 001', exact: true })
     await h.user.click(screen.getByRole('button', { name: 'Próxima página' }))
     await h.user.click(
-        screen.getByRole('button', { name: 'Música 051', exact: true }),
+        screen.getByRole('button', { name: 'Música 021', exact: true }),
     )
     const call = h.calls.find((call) => call.command === 'playback_load')!
     expect(call.args?.context).toEqual({
         kind: 'library',
         trackIds: Array.from({ length: 64 }, (_, index) => `t${index + 1}`),
     })
-    expect(screen.getByText(/51 de 64/)).toBeInTheDocument()
+    expect(screen.getByText(/21 de 64/)).toBeInTheDocument()
     expect(
-        screen.getByText('Música 052', { selector: '.queue-next strong' }),
+        screen.getByText('Música 022', { selector: '.queue-next strong' }),
     ).toBeInTheDocument()
     await act(async () => {
         await h.api.library.open('t0')

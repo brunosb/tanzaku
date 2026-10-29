@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Music2, Search } from 'lucide-react'
+import { PAGE_SIZE } from '@/features/catalog/model/catalog-model'
 import { type CatalogContext } from '@/features/catalog/model/context'
 import { useCatalog } from '@/features/catalog/model/hooks'
 import { run } from '@/shared/lib/report-error'
@@ -84,7 +85,8 @@ export function Pages({
     return (
         <div className="page-pagination">
             <span>
-                {total} {unit} encontradas
+                {total ? (page - 1) * PAGE_SIZE + 1 : 0}–
+                {Math.min(page * PAGE_SIZE, total)} de {total} {unit}
             </span>
             <Pagination aria-label="Paginação">
                 <PaginationContent>

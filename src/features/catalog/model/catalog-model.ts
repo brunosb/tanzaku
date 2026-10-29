@@ -55,7 +55,8 @@ export function filterLibrary(
             collator.compare(a.title, b.title),
     )
 }
-export function paginate<T>(entries: T[], page: number, size = 50) {
+export const PAGE_SIZE = 20
+export function paginate<T>(entries: T[], page: number, size = PAGE_SIZE) {
     const pages = Math.max(1, Math.ceil(entries.length / size))
     const current = Math.min(pages, Math.max(1, page))
     return {
