@@ -1,0 +1,29 @@
+name: Relatar um bug
+description: Informe um problema reproduzível no Tanzaku.
+title: 'fix: '
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Versão do Tanzaku e do Windows
+      placeholder: 'Tanzaku 1.0.0, Windows 11 x64'
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Como reproduzir
+      description: Informe os passos, o resultado esperado e o que aconteceu.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Capturas e informações adicionais
+      description: Remova dados pessoais antes de anexar diagnósticos.
+  - type: checkboxes
+    id: administrator
+    attributes:
+      label: Reprodução no jogo
+      options:
+        - label: Executei o Tanzaku como administrador e mantive o jogo em foco.

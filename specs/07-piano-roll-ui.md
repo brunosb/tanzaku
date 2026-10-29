@@ -14,4 +14,6 @@ Duas camadas estáticas compartilham os dados: a base cinza azulada e o degradê
 
 O conjunto ativo vem do worker e é limitado pelo fim visual da nota. Pausa, parada e descarregamento limpam destaques. A interpolação do cursor é somente apresentação, limitada a 100 ms sem novos snapshots. Nenhum timer do renderer dispara notas, countdown ou próxima faixa.
 
+O ResizeObserver calcula a altura das 21 linhas usando o espaço interno disponível, descontando cabeçalhos, bordas e a barra horizontal. As linhas variam entre 14 e 24 px. Em 900×920, com música carregada, todas devem estar visíveis. Janelas menores preservam a rolagem interna e o acesso aos controles. O transporte apresenta Avanço automático com tooltip e aria-pressed; Repetir identifica se o alvo é a faixa ou a fila.
+
 Título, plano e estado pertencem à mesma geração. A janela possui região de arraste Tauri e tratamento das rejeições dos controles. Progresso de YouTube é associado ao jobId; cancelar ou trocar o modal impede atualizações da operação anterior.

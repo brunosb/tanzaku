@@ -13,3 +13,7 @@ A fila atende biblioteca e playlist. A biblioteca recebe os IDs do resultado com
 Aleatório mantém a música atual e embaralha as outras faixas em uma nova rodada. O histórico permite voltar e avançar pelas mesmas escolhas, inclusive entre rodadas repetidas. Desativar Aleatório restaura o índice da faixa na ordem original. Metadados da fila entram em Snapshot/playback-plan, separados dos eventos periódicos de posição, e chegam ao renderer por playback.onQueue. Os comandos playback_previous, playback_next e playback_set_shuffle são processados pelo mesmo worker proprietário das teclas.
 
 O encerramento solicita Shutdown e aguarda a liberação antes de terminar o worker. Timings de planejamento e resumo P95/máximo do despacho são registrados para diagnóstico; não medem o processamento interno do jogo.
+
+Avanço automático começa desligado e é persistido em `settings.json` por biblioteca como `autoAdvanceEnabled`. O comando `playback_set_auto_advance` confirma a gravação antes de atualizar o worker; falha na persistência mantém a política anterior. Inicialização e troca de armazenamento restauram a preferência. `PlaybackState.autoAdvanceEnabled` informa o estado confirmado à interface.
+
+Com avanço desligado, o final permanece na faixa atual; Repetir repete somente essa faixa. Com avanço ligado, a fila continua e Repetir reinicia a fila. Anterior/Próxima independem dessa preferência. Desligar durante um carregamento automático invalida o token, libera as teclas e conserva o cursor da faixa atual no estado ended.
