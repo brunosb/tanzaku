@@ -46,8 +46,7 @@ pub(crate) fn set_directory(
 
     storage::write_settings_at(&root, settings)?;
 
-    for base in [dirs::data_dir(), dirs::config_dir()].into_iter().flatten() {
-        let pointer = base.join("Tanzaku");
+    for pointer in storage::pointer_roots() {
         if pointer != root {
             let mut value: serde_json::Value = storage::read_json(pointer.join("settings.json"))?;
             if value.is_null() {

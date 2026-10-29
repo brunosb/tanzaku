@@ -15,7 +15,11 @@ fn default_storage_root() -> PathBuf {
         .join("Tanzaku")
 }
 
-fn pointer_roots() -> Vec<PathBuf> {
+pub(crate) fn pointer_roots() -> Vec<PathBuf> {
+    // Isolated development/smoke sessions must never rewrite the user's pointer.
+    if let Some(root) = env::var_os("TANZAKU_DATA_DIR").filter(|value| !value.is_empty()) {
+        return vec![PathBuf::from(root)];
+    }
     let mut roots = Vec::new();
     for base in [dirs::data_dir(), dirs::config_dir()].into_iter().flatten() {
         let root = base.join("Tanzaku");

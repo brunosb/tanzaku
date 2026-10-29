@@ -226,7 +226,7 @@ module.exports = async function navigationSmoke({
         tracks: entries.length,
         pageSize: 20,
         search10kMs: searchMs,
-        selectedAcrossPages: 51,
+        selectedAcrossPages: 21,
         nativeBulkAndReorder: true,
         preservedPlayback: true,
     }
