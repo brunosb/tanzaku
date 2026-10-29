@@ -236,6 +236,12 @@ async function main() {
             (await evaluate('window.tanzaku.library.list()')).length,
             2,
         )
+        const queue = await require('./smoke-playback-queue.cjs')({
+            evaluate,
+            send,
+            data,
+            artifacts,
+        })
         const playlist = await evaluate(
             "window.tanzaku.playlists.create('Smoke')",
         )
@@ -380,6 +386,7 @@ async function main() {
             checks: 'real WebView2 + Tauri IPC + ONNX passed',
             presentation,
             navigation,
+            queue,
             youtube: youtubeResult,
             events: plan.events.length,
             transcribedNotes: summary.notes,

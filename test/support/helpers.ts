@@ -2,6 +2,8 @@ import { createRuntime } from '../../src/app/runtime'
 import {
     initialState,
     type LibraryEntry,
+    type PlaybackQueue,
+    type PlaybackSource,
     type Playlist,
     type Snapshot,
     type TauriGlobal,
@@ -28,6 +30,7 @@ export function harness(size = 65) {
         state: initialState(),
         track: null,
         plan: { events: [], duration: 0 },
+        queue: null,
     }
     const handlers = new Map<string, (e: { payload: unknown }) => void>()
     const calls: { command: string; args?: Record<string, unknown> }[] = []
@@ -75,7 +78,41 @@ export function harness(size = 65) {
                         return structuredClone(snapshot)
                     case 'playback_load': {
                         const e = entries.find((e) => e.id === id)!
+                        const context = args.context as
+                            | PlaybackSource
+                            | undefined
+                        const playlist =
+                            context?.kind === 'playlist'
+                                ? playlists.find(
+                                      (p) => p.id === context.playlistId,
+                                  )
+                                : null
+                        const ids =
+                            playlist?.trackIds ??
+                            (context?.kind === 'library'
+                                ? context.trackIds
+                                : entries.map((e) => e.id))
+                        const index = ids.indexOf(id)
+                        const track = (id: string | undefined) => {
+                            const entry = entries.find(
+                                (entry) => entry.id === id,
+                            )
+                            return entry
+                                ? { id: entry.id, title: entry.title }
+                                : null
+                        }
                         snapshot = {
+                            queue: {
+                                source: playlist ? 'playlist' : 'library',
+                                playlist: playlist
+                                    ? { id: playlist.id, name: playlist.name }
+                                    : null,
+                                mode: 'order',
+                                index,
+                                total: ids.length,
+                                previous: track(ids[index - 1]),
+                                next: track(ids[index + 1]),
+                            },
                             state: {
                                 ...initialState(),
                                 generation: snapshot.state.generation + 1,
@@ -159,6 +196,7 @@ export function harness(size = 65) {
                                     sequence: snapshot.state.sequence + 1,
                                 },
                                 track: null,
+                                queue: null,
                                 plan: { duration: 0, events: [] },
                             }
                             emit('playback-plan', structuredClone(snapshot))
@@ -172,6 +210,7 @@ export function harness(size = 65) {
                                 sequence: snapshot.state.sequence + 1,
                             },
                             track: null,
+                            queue: null,
                             plan: { duration: 0, events: [] },
                         }
                         entries = []
@@ -195,6 +234,17 @@ export function harness(size = 65) {
         runtime,
         calls,
         emit,
+        queue: (queue: PlaybackQueue | null) => {
+            snapshot = {
+                ...snapshot,
+                queue,
+                state: {
+                    ...snapshot.state,
+                    sequence: snapshot.state.sequence + 1,
+                },
+            }
+            emit('playback-plan', structuredClone(snapshot))
+        },
         state: (patch: Partial<Snapshot['state']>) => {
             snapshot.state = {
                 ...snapshot.state,

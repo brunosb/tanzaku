@@ -1,7 +1,7 @@
 use super::{
     keyboard::{Device, Keyboard},
-    loader::Queue,
     model::Model,
+    queue::Queue,
     types::*,
 };
 use crate::music::types::PlaybackPlan;
@@ -73,14 +73,21 @@ fn pause_seek_and_cancel_invalidate_pending_load_and_release() {
     assert_eq!(m.state.status, PlaybackStatus::Paused);
 }
 #[test]
-fn queue_repeat_and_stop_do_not_rearm_or_restart() {
+fn queue_repeat_and_clear_do_not_rearm_or_restart() {
     let now = Instant::now();
     let mut m = Model::new(now);
-    m.queue = Some(Queue {
-        ids: vec!["a".into(), "b".into()],
-        index: 0,
-        shuffle: false,
-    });
+    m.queue = Some(Queue::new(
+        ["a", "b"]
+            .into_iter()
+            .map(|id| Track {
+                id: id.into(),
+                title: id.into(),
+            })
+            .collect(),
+        "a",
+        None,
+        false,
+    ));
     let (id, queue) = m.next().unwrap();
     assert_eq!(id, "b");
     m.queue = queue;

@@ -49,10 +49,23 @@ export type Playlist = {
     trackIds: string[]
     createdAt?: string
 }
+export type PlaybackSource =
+    | { kind: 'library'; trackIds: string[] }
+    | { kind: 'playlist'; playlistId: string }
+export type PlaybackQueue = {
+    source: 'library' | 'playlist'
+    playlist: { id: string; name: string } | null
+    mode: 'order' | 'shuffle'
+    index: number
+    total: number
+    previous: Track | null
+    next: Track | null
+}
 export type Snapshot = {
     state: PlaybackState
     track: Track | null
     plan: PlaybackPlan
+    queue: PlaybackQueue | null
 }
 export type YoutubeProgress = {
     jobId: string
@@ -69,7 +82,7 @@ export type TanzakuApi = {
     }
     library: {
         list(): Promise<LibraryEntry[]>
-        open(id: string): Promise<PlaybackPlan>
+        open(id: string, context?: PlaybackSource): Promise<PlaybackPlan>
         rename(id: string, title: string): Promise<LibraryEntry>
         remove(id: string): Promise<LibraryEntry[]>
         import(): Promise<LibraryEntry | null>
@@ -77,7 +90,10 @@ export type TanzakuApi = {
         cancelYoutube(): Promise<void>
     }
     playback: {
-        load(id: string): Promise<PlaybackPlan>
+        load(id: string, context?: PlaybackSource): Promise<PlaybackPlan>
+        previous(): Promise<void>
+        next(): Promise<void>
+        setShuffle(enabled: boolean): Promise<void>
         play(): Promise<void>
         pause(): Promise<void>
         stop(): Promise<void>
@@ -86,6 +102,7 @@ export type TanzakuApi = {
         toggleRepeat(): Promise<boolean>
         onState: Subscription<PlaybackState>
         onPlan: Subscription<PlaybackPlan>
+        onQueue: Subscription<PlaybackQueue | null>
         onCountdown: Subscription<{ remaining: number }>
         onEvent(
             listener: (

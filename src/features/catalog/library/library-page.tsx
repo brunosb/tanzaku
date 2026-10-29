@@ -133,6 +133,7 @@ export function LibraryPage({ runtime, open, importMidi }: CatalogProps) {
                 <>
                     <Tracks
                         runtime={runtime}
+                        queueIds={result.map((entry) => entry.id)}
                         rows={page.items.map((entry) => ({
                             id: entry.id,
                             title: entry.title,

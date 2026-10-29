@@ -23,15 +23,21 @@ O Git LFS deve recuperar `src-tauri/bin/ffmpeg.exe` como um executável completo
 2. Selecione a música ou inicie uma playlist em ordem/aleatória.
 3. Aperte Reproduzir e foque o jogo durante os cinco segundos da contagem.
 4. Ao perder o foco, a reprodução pausa e libera as teclas. Retome explicitamente pelo aplicativo.
-5. Home pausa; End para e cancela a fila.
+5. Home pausa; End para e cancela transições pendentes, preservando a fila.
 
-A velocidade altera ataques e durações. Em 2x, uma nota de um segundo dura meio segundo real. Buscar libera as teclas; se a música estava tocando, a retomada utiliza a contagem inicial. Entre faixas da mesma playlist, não há nova contagem nem captura de outra janela.
+A velocidade altera ataques e durações. Em 2x, uma nota de um segundo dura meio segundo real. Buscar libera as teclas; se a música estava tocando, a retomada utiliza a contagem inicial. A continuação automática da biblioteca e das playlists preserva a janela do jogo e dispensa outra contagem.
+
+Anterior e Próxima percorrem a fila atual. Ao trocar manualmente uma música que estava tocando ou pausou por perda de foco, há uma nova contagem de cinco segundos. Se já estava pausada manualmente ou parada, a próxima fica carregada até Reproduzir. O modo Aleatório percorre todas as faixas sem repetir na rodada e preserva o histórico de Anterior/Próxima; desativá-lo restaura a ordem original a partir da faixa atual. Repetir fila reinicia a lista ao terminar.
+
+O tocador mostra a origem, a posição na fila e a próxima música. A barra de posição traz uma forma de onda construída com a atividade das notas MIDI: a parte percorrida recebe um degradê dourado. Clique, arraste ou use o teclado para buscar uma posição.
 
 O mapa mantém as alturas 48–83 e utiliza teclas naturais, SHIFT e CTRL. O planner agrupa ataques em até 20 ms, seleciona até seis notas por grupo e distribui acordes em passos de 5 ms no tempo musical. Notas fora da faixa e notas removidas pela seleção são contabilizadas no plano.
 
 ## Biblioteca e playlists
 
 O menu lateral separa Tocador, Biblioteca e Playlists. Clicar no nome de uma música carrega o plano e abre o piano roll; Reproduzir inicia a contagem. A barra inferior permanece disponível em todas as páginas.
+
+Na biblioteca, a fila inclui todas as páginas do resultado filtrado e ordenado no momento da abertura. Na playlist, usa a ordem original e começa na faixa escolhida. Aberturas pelos avisos de importação/conversão usam toda a biblioteca em ordem A–Z. A fila e o modo aleatório duram apenas durante a sessão.
 
 A biblioteca permite buscar sem distinguir acentos ou maiúsculas, filtrar origem e participação em playlists e ordenar por nome ou inclusão. Ctrl+F foca a busca da página. A seleção por checkbox é independente do carregamento; o checkbox do cabeçalho seleciona a página atual, com 50 músicas, e a seleção permanece entre páginas.
 

@@ -4,6 +4,8 @@ import {
     type LibraryEntry,
     type PlaybackEvent,
     type PlaybackPlan,
+    type PlaybackQueue,
+    type PlaybackSource,
     type PlaybackState,
     type Snapshot,
     type TanzakuApi,
@@ -17,12 +19,14 @@ export function createBridge(tauri: TauriGlobal): TanzakuApi {
     let state = initialState()
     let plan: PlaybackPlan = { events: [], duration: 0 }
     let track: Track | null = null
+    let queue: PlaybackQueue | null = null
     let planGeneration = -1
     let refreshing: Promise<void> | undefined
     let youtube: { id: string; canceled: boolean } | undefined
     const states = new Set<(v: PlaybackState) => void>()
     const plans = new Set<(v: PlaybackPlan) => void>()
     const tracks = new Set<(v: Track | null) => void>()
+    const queues = new Set<(v: PlaybackQueue | null) => void>()
     const countdowns = new Set<(v: { remaining: number }) => void>()
     const events = new Set<
         (v: PlaybackEvent, i: number, timing: DispatchTiming) => void
@@ -51,10 +55,14 @@ export function createBridge(tauri: TauriGlobal): TanzakuApi {
         plan = next.plan
         const trackChanged =
             track?.id !== next.track?.id || track?.title !== next.track?.title
+        const nextQueue = next.queue ?? null
+        const queueChanged = JSON.stringify(queue) !== JSON.stringify(nextQueue)
+        queue = nextQueue
         track = next.track
         state = next.state
         if (trackChanged || changed) for (const fn of tracks) fn(track)
         if (changed) for (const fn of plans) fn(plan)
+        if (queueChanged) for (const fn of queues) fn(queue)
         emitState()
     }
     const refresh = (): Promise<void> => {
@@ -104,8 +112,24 @@ export function createBridge(tauri: TauriGlobal): TanzakuApi {
         await ready
         return tauri.core.invoke<T>(command, args)
     }
-    const load = async (id: string) => {
-        const result = await invoke<PlaybackPlan>('playback_load', { id })
+    const load = async (id: string, context?: PlaybackSource) => {
+        if (!context) {
+            const entries = await invoke<LibraryEntry[]>('library_list')
+            const collator = new Intl.Collator('pt-BR', {
+                sensitivity: 'base',
+                numeric: true,
+            })
+            context = {
+                kind: 'library',
+                trackIds: entries
+                    .sort((a, b) => collator.compare(a.title, b.title))
+                    .map((entry) => entry.id),
+            }
+        }
+        const result = await invoke<PlaybackPlan>('playback_load', {
+            id,
+            context,
+        })
         await refresh()
         return result
     }
@@ -165,6 +189,10 @@ export function createBridge(tauri: TauriGlobal): TanzakuApi {
         },
         playback: {
             load,
+            previous: () => invoke('playback_previous'),
+            next: () => invoke('playback_next'),
+            setShuffle: (enabled) =>
+                invoke('playback_set_shuffle', { enabled }),
             play: () => invoke('playback_start'),
             pause: () => invoke('playback_pause'),
             stop: () => invoke('playback_stop'),
@@ -174,6 +202,7 @@ export function createBridge(tauri: TauriGlobal): TanzakuApi {
             toggleRepeat: () => invoke('playback_toggle_repeat'),
             onState: subscription(states, () => ({ ...state })),
             onPlan: subscription(plans, () => plan),
+            onQueue: subscription(queues, () => queue),
             onCountdown: subscription(countdowns, () => ({
                 remaining: state.countdownRemaining,
             })),

@@ -1,7 +1,7 @@
 use super::{
     events::AppPublisher,
     loader::{Prepared, WorkerConfig},
-    types::Snapshot,
+    types::{QueueInput, Snapshot},
     worker::run_worker,
 };
 use crate::platform::input::NativeDevice;
@@ -11,8 +11,12 @@ use std::{
 };
 use tauri::AppHandle;
 pub enum Action {
-    Load(String),
+    Load(String, Option<QueueInput>),
     Playlist(String, bool),
+    Previous,
+    Next,
+    Shuffle(bool),
+    RenamePlaylist(String, String),
     Play,
     Pause,
     Stop,
@@ -30,7 +34,7 @@ pub(super) enum Command {
     Loaded {
         token: u64,
         result: Result<Prepared, String>,
-        auto: bool,
+        start: super::loader::StartMode,
         reply: Option<Sender<Result<Snapshot, String>>>,
     },
 }

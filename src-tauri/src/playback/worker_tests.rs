@@ -2,7 +2,8 @@ use super::{
     controller::{Action, PlaybackController},
     events::Publisher,
     keyboard::Device,
-    loader::{LoadSpec, Loader, Prepared, Queue, WorkerConfig},
+    loader::{LoadSpec, Loader, Prepared, WorkerConfig},
+    queue::Queue,
     types::*,
     worker::run_worker,
 };
@@ -41,7 +42,7 @@ impl Device for DeviceProbe {
 }
 enum Notice {
     State(PlaybackState),
-    Plan(Snapshot),
+    Plan(Box<Snapshot>),
     Event,
 }
 struct Probe(Sender<Notice>);
@@ -50,7 +51,7 @@ impl Publisher for Probe {
         let _ = self.0.send(Notice::State(v));
     }
     fn plan(&self, v: Snapshot) {
-        let _ = self.0.send(Notice::Plan(v));
+        let _ = self.0.send(Notice::Plan(Box::new(v)));
     }
     fn event(&self, _: EventNotice) {
         let _ = self.0.send(Notice::Event);
@@ -127,6 +128,23 @@ fn prepared(id: &str, time: f64, hold: f64) -> Prepared {
         queue: None,
     }
 }
+fn test_queue(ids: Vec<String>) -> Queue {
+    let current = ids[0].clone();
+    Queue::new(
+        ids.into_iter()
+            .map(|id| Track {
+                title: id.clone(),
+                id,
+            })
+            .collect(),
+        &current,
+        Some(QueuePlaylist {
+            id: "p".into(),
+            name: "Playlist de teste".into(),
+        }),
+        false,
+    )
+}
 #[test]
 fn stopped_loading_cannot_resurrect() {
     let (gate, wait) = mpsc::channel();
@@ -135,7 +153,10 @@ fn stopped_loading_cannot_resurrect() {
         wait.lock().unwrap().recv().unwrap();
         Ok(prepared("a", 0.0, 1.0))
     }));
-    let pending = h.controller.enqueue(Action::Load("a".into())).unwrap();
+    let pending = h
+        .controller
+        .enqueue(Action::Load("a".into(), None))
+        .unwrap();
     h.wait(|n| matches!(n,Notice::State(s)if s.status==PlaybackStatus::Loading));
     h.controller.request(Action::Stop).unwrap();
     gate.send(()).unwrap();
@@ -154,14 +175,10 @@ fn playlist_continues_without_countdown_or_rearming() {
     let h = Harness::new(Arc::new(|spec| match spec {
         LoadSpec::Playlist(_, _) => {
             let mut p = prepared("a", 0.0, 0.03);
-            p.queue = Some(Queue {
-                ids: vec!["a".into(), "b".into()],
-                index: 0,
-                shuffle: false,
-            });
+            p.queue = Some(test_queue(vec!["a".into(), "b".into()]));
             Ok(p)
         }
-        LoadSpec::Track(id) => Ok(prepared(&id, 0.0, 10.0)),
+        LoadSpec::Track(id) | LoadSpec::Context(id, _, _) => Ok(prepared(&id, 0.0, 10.0)),
     }));
     h.controller
         .request(Action::Playlist("p".into(), false))
@@ -180,7 +197,9 @@ fn playlist_continues_without_countdown_or_rearming() {
 #[test]
 fn focus_loss_pauses_even_before_next_attack() {
     let h = Harness::new(Arc::new(|_| Ok(prepared("a", 1.0, 10.0))));
-    h.controller.request(Action::Load("a".into())).unwrap();
+    h.controller
+        .request(Action::Load("a".into(), None))
+        .unwrap();
     h.controller.request(Action::Play).unwrap();
     h.wait(|n| matches!(n,Notice::State(s)if s.status==PlaybackStatus::Playing));
     let start = Instant::now();
@@ -193,7 +212,9 @@ fn focus_loss_pauses_even_before_next_attack() {
 #[test]
 fn shutdown_confirms_release_of_sustain_and_modifiers() {
     let h = Harness::new(Arc::new(|_| Ok(prepared("a", 0.0, 10.0))));
-    h.controller.request(Action::Load("a".into())).unwrap();
+    h.controller
+        .request(Action::Load("a".into(), None))
+        .unwrap();
     h.controller.request(Action::Play).unwrap();
     h.wait(|n| matches!(n, Notice::Event));
     h.controller.request(Action::Shutdown).unwrap();
@@ -212,14 +233,10 @@ fn pausing_pending_transition_does_not_skip_next_track_on_resume() {
     let h = Harness::new(Arc::new(move |spec| match spec {
         LoadSpec::Playlist(_, _) => {
             let mut p = prepared("a", 0.0, 0.03);
-            p.queue = Some(Queue {
-                ids: vec!["a".into(), "b".into(), "c".into()],
-                index: 0,
-                shuffle: false,
-            });
+            p.queue = Some(test_queue(vec!["a".into(), "b".into(), "c".into()]));
             Ok(p)
         }
-        LoadSpec::Track(id) => {
+        LoadSpec::Track(id) | LoadSpec::Context(id, _, _) => {
             requested.lock().unwrap().push(id.clone());
             wait.lock().unwrap().recv().unwrap();
             Ok(prepared(&id, 0.0, 10.0))
@@ -252,14 +269,10 @@ fn playlist_edits_apply_only_to_the_next_execution() {
         LoadSpec::Playlist(_, _) => {
             let ids = source.lock().unwrap().clone();
             let mut p = prepared(&ids[0], 0.0, 0.2);
-            p.queue = Some(Queue {
-                ids,
-                index: 0,
-                shuffle: false,
-            });
+            p.queue = Some(test_queue(ids));
             Ok(p)
         }
-        LoadSpec::Track(id) => Ok(prepared(&id, 0.0, 10.0)),
+        LoadSpec::Track(id) | LoadSpec::Context(id, _, _) => Ok(prepared(&id, 0.0, 10.0)),
     }));
     h.controller
         .request(Action::Playlist("p".into(), false))
@@ -274,4 +287,165 @@ fn playlist_edits_apply_only_to_the_next_execution() {
     h.wait(|n| matches!(n,Notice::Plan(s)if s.track.as_ref().is_some_and(|t|t.id=="c")));
     let next = h.controller.request(Action::Snapshot).unwrap();
     assert_eq!(next.track.unwrap().id, "c");
+}
+
+fn library_loader() -> Loader {
+    Arc::new(|spec| {
+        let (id, context) = match spec {
+            LoadSpec::Context(id, _, random) => (id, Some(random)),
+            LoadSpec::Track(id) => (id, None),
+            LoadSpec::Playlist(_, _) => unreachable!(),
+        };
+        let mut p = prepared(&id, 0.0, 10.0);
+        if let Some(random) = context {
+            p.queue = Some(Queue::new(
+                ["a", "b", "c"]
+                    .into_iter()
+                    .map(|id| Track {
+                        id: id.into(),
+                        title: id.into(),
+                    })
+                    .collect(),
+                &id,
+                None,
+                random,
+            ));
+        }
+        Ok(p)
+    })
+}
+
+#[test]
+fn manual_skips_respect_pause_focus_loss_and_stop_keeps_context() {
+    let h = Harness::new(library_loader());
+    let opened = h
+        .controller
+        .request(Action::Load("a".into(), None))
+        .unwrap();
+    assert_eq!(opened.state.status, PlaybackStatus::Idle);
+    assert_eq!(opened.queue.unwrap().next.unwrap().id, "b");
+    let next = h.controller.request(Action::Next).unwrap();
+    assert_eq!(next.track.unwrap().id, "b");
+    assert_eq!(next.state.status, PlaybackStatus::Idle);
+    assert_eq!(h.device.arms.load(Ordering::SeqCst), 0);
+    h.controller.request(Action::Play).unwrap();
+    h.wait(
+        |notice| matches!(notice, Notice::State(state) if state.status == PlaybackStatus::Playing),
+    );
+    let next = h.controller.request(Action::Next).unwrap();
+    assert_eq!(next.state.status, PlaybackStatus::Countdown);
+    h.wait(|notice| matches!(notice, Notice::State(state) if state.status == PlaybackStatus::Playing && state.generation == 3));
+    assert_eq!(h.device.arms.load(Ordering::SeqCst), 2);
+    h.device.focused.store(false, Ordering::SeqCst);
+    h.wait(|notice| matches!(notice, Notice::State(state) if state.pause_reason.as_deref() == Some("focus-lost")));
+    let previous = h.controller.request(Action::Previous).unwrap();
+    assert_eq!(previous.state.status, PlaybackStatus::Countdown);
+    h.wait(|notice| matches!(notice, Notice::State(state) if state.status == PlaybackStatus::Playing && state.generation == 4));
+    h.controller.request(Action::Pause).unwrap();
+    let previous = h.controller.request(Action::Previous).unwrap();
+    assert_eq!(previous.state.status, PlaybackStatus::Idle);
+    h.controller.request(Action::Stop).unwrap();
+    let stopped = h.controller.request(Action::Snapshot).unwrap();
+    assert!(stopped.queue.is_some());
+    assert!(stopped.state.active_event_indices.is_empty());
+    assert_eq!(
+        h.controller.request(Action::Next).unwrap().state.status,
+        PlaybackStatus::Idle
+    );
+    assert_eq!(h.device.arms.load(Ordering::SeqCst), 3);
+}
+
+#[test]
+fn queue_metadata_changes_do_not_replace_plan_and_failed_skip_keeps_cursor() {
+    let good = library_loader();
+    let h = Harness::new(Arc::new(move |spec| {
+        if matches!(&spec, LoadSpec::Track(id) if id == "c") {
+            return Err("MIDI indisponível".into());
+        }
+        good(spec)
+    }));
+    let opened = h
+        .controller
+        .request(Action::Load("b".into(), None))
+        .unwrap();
+    let generation = opened.state.generation;
+    h.controller
+        .request(Action::Rename("c".into(), "Próxima renomeada".into()))
+        .unwrap();
+    let renamed = h.controller.request(Action::Snapshot).unwrap();
+    assert_eq!(
+        renamed.queue.unwrap().next.unwrap().title,
+        "Próxima renomeada"
+    );
+    assert_eq!(renamed.state.generation, generation);
+    assert!(h.controller.request(Action::Next).is_err());
+    let failed = h.controller.request(Action::Snapshot).unwrap();
+    assert_eq!(failed.track.unwrap().id, "b");
+    assert_eq!(failed.queue.unwrap().index, 1);
+    assert_eq!(failed.state.generation, generation);
+    assert_eq!(failed.state.status, PlaybackStatus::Paused);
+    assert!(failed.state.error.is_some());
+    h.controller.request(Action::Remove("c".into())).unwrap();
+    let removed = h.controller.request(Action::Snapshot).unwrap();
+    assert!(removed.queue.unwrap().next.is_none());
+    h.controller.request(Action::Shuffle(true)).unwrap();
+    let shuffled = h.controller.request(Action::Snapshot).unwrap();
+    assert_eq!(shuffled.queue.unwrap().mode, "shuffle");
+    assert_eq!(shuffled.state.generation, generation);
+}
+
+#[test]
+fn pending_skip_preserves_renames_and_stop_does_not_commit_the_cursor() {
+    let (gate, wait) = mpsc::channel();
+    let wait = Mutex::new(wait);
+    let ready = library_loader();
+    let h = Harness::new(Arc::new(move |spec| {
+        if matches!(spec, LoadSpec::Track(_)) {
+            wait.lock().unwrap().recv().unwrap();
+        }
+        let mut p = ready(spec)?;
+        if let Some(queue) = &mut p.queue {
+            queue.source = QueueKind::Playlist;
+            queue.playlist = Some(QueuePlaylist {
+                id: "p".into(),
+                name: "Nome anterior".into(),
+            });
+        }
+        Ok(p)
+    }));
+    h.controller
+        .request(Action::Load("a".into(), None))
+        .unwrap();
+    let next = h.controller.enqueue(Action::Next).unwrap();
+    h.wait(|notice| matches!(notice, Notice::State(state) if state.status == PlaybackStatus::Loading && state.generation == 1));
+    h.controller
+        .request(Action::Rename("b".into(), "Novo título".into()))
+        .unwrap();
+    h.controller
+        .request(Action::RenamePlaylist(
+            "p".into(),
+            "Novo nome da playlist".into(),
+        ))
+        .unwrap();
+    assert!(h.controller.request(Action::Shuffle(true)).is_err());
+    assert_eq!(
+        h.controller.request(Action::Snapshot).unwrap().state.status,
+        PlaybackStatus::Loading
+    );
+    gate.send(()).unwrap();
+    let installed = next.recv_timeout(Duration::from_secs(2)).unwrap().unwrap();
+    assert_eq!(installed.track.unwrap().title, "Novo título");
+    let queue = installed.queue.unwrap();
+    assert_eq!(queue.index, 1);
+    assert_eq!(queue.playlist.unwrap().name, "Novo nome da playlist");
+    let next = h.controller.enqueue(Action::Next).unwrap();
+    h.wait(|notice| matches!(notice, Notice::State(state) if state.status == PlaybackStatus::Loading && state.generation == 2));
+    h.controller.request(Action::Stop).unwrap();
+    gate.send(()).unwrap();
+    assert!(next.recv_timeout(Duration::from_secs(2)).unwrap().is_err());
+    let stopped = h.controller.request(Action::Snapshot).unwrap();
+    assert_eq!(stopped.track.unwrap().id, "b");
+    assert_eq!(stopped.queue.unwrap().index, 1);
+    assert_eq!(stopped.state.status, PlaybackStatus::Stopped);
+    assert_eq!(h.device.arms.load(Ordering::SeqCst), 0);
 }
