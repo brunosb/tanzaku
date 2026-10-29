@@ -1,6 +1,7 @@
 import {
     initialState,
     type PlaybackPlan,
+    type PlaybackQueue,
     type TanzakuApi,
     type Track,
 } from '@/shared/api/contracts'
@@ -14,8 +15,13 @@ export function createPlaybackStore(api: TanzakuApi) {
         track: null as Track | null,
         plan: { events: [], duration: 0 } as PlaybackPlan,
         version: 0,
+        queue: null as PlaybackQueue | null,
     }
     const unsubscribers = [
+        api.playback.onQueue((queue) => {
+            meta = { ...meta, queue }
+            metaSignal.emit()
+        }),
         api.onTrack((track) => {
             meta = { ...meta, track }
             metaSignal.emit()

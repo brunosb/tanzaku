@@ -20,8 +20,21 @@ pub(crate) async fn playlist_create(name: String) -> Result<storage::Playlist, S
 
 #[tauri::command]
 
-pub(crate) async fn playlist_rename(id: String, name: String) -> Result<storage::Playlist, String> {
-    blocking(move || storage::playlist_rename(id, name)).await
+pub(crate) async fn playlist_rename(
+    id: String,
+    name: String,
+    controller: tauri::State<'_, PlaybackController>,
+) -> Result<storage::Playlist, String> {
+    let controller = controller.inner().clone();
+    blocking(move || {
+        let playlist = storage::playlist_rename(id, name)?;
+        controller.request(Action::RenamePlaylist(
+            playlist.id.clone(),
+            playlist.name.clone(),
+        ))?;
+        Ok(playlist)
+    })
+    .await
 }
 
 #[tauri::command]

@@ -12,10 +12,9 @@ import {
     defaultView,
     filterLibrary,
     membershipCounts,
-    paginate,
 } from '@/features/catalog/model/catalog-model'
 import { type CatalogProps } from '@/features/catalog/model/dialog-actions'
-import { useCatalog, useView } from '@/features/catalog/model/hooks'
+import { useCatalog, usePage, useView } from '@/features/catalog/model/hooks'
 import { Button } from '@/shared/ui/button'
 export function LibraryPage({ runtime, open, importMidi }: CatalogProps) {
     const catalog = useCatalog(runtime)
@@ -36,7 +35,7 @@ export function LibraryPage({ runtime, open, importMidi }: CatalogProps) {
             view.sort,
         ],
     )
-    const page = paginate(result, view.page)
+    const page = usePage(result, view, update)
     const validIds = useMemo(
         () => new Set(catalog.entries.map((e) => e.id)),
         [catalog.entries],
@@ -133,6 +132,7 @@ export function LibraryPage({ runtime, open, importMidi }: CatalogProps) {
                 <>
                     <Tracks
                         runtime={runtime}
+                        queueIds={result.map((entry) => entry.id)}
                         rows={page.items.map((entry) => ({
                             id: entry.id,
                             title: entry.title,

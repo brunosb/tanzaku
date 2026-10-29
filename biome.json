@@ -41,5 +41,13 @@
             "!midi-cache/**/*.mid",
             "!midi-cache/.plan-cache/**"
         ]
-    }
+    },
+    "overrides": [
+        {
+            "includes": [".release-please-manifest.json"],
+            "formatter": {
+                "enabled": false
+            }
+        }
+    ]
 }

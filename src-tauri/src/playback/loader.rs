@@ -1,6 +1,7 @@
 use super::{
     controller::Command,
-    types::{Snapshot, Track},
+    queue::Queue,
+    types::{QueueInput, QueuePlaylist, Snapshot, Track},
 };
 use crate::{library as storage, music::types::PlaybackPlan};
 use std::{
@@ -12,20 +13,27 @@ pub(super) type Loader = std::sync::Arc<dyn Fn(LoadSpec) -> Result<Prepared, Str
 pub(super) struct WorkerConfig {
     pub(super) countdown: Duration,
     pub(super) loader: Loader,
+    pub(super) auto_advance: Result<bool, String>,
 }
 impl Default for WorkerConfig {
     fn default() -> Self {
         Self {
             countdown: Duration::from_secs(5),
             loader: std::sync::Arc::new(prepare),
+            auto_advance: (|| {
+                let _guard = storage::transaction()?;
+                Ok(storage::read_settings()?["autoAdvanceEnabled"]
+                    .as_bool()
+                    .unwrap_or(false))
+            })(),
         }
     }
 }
-#[derive(Clone)]
-pub(super) struct Queue {
-    pub(super) ids: Vec<String>,
-    pub(super) index: usize,
-    pub(super) shuffle: bool,
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum StartMode {
+    Loaded,
+    Countdown,
+    Continue,
 }
 pub(super) struct Prepared {
     pub(super) track: Track,
@@ -35,6 +43,7 @@ pub(super) struct Prepared {
 pub(super) enum LoadSpec {
     Track(String),
     Playlist(String, bool),
+    Context(String, QueueInput, bool),
 }
 pub(super) fn shuffle(ids: &mut [String]) {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -57,30 +66,14 @@ pub(super) fn prepare(spec: LoadSpec) -> Result<Prepared, String> {
         let entries = storage::read_library()?;
         let (id, queue) = match spec {
             LoadSpec::Track(id) => (id, None),
-            LoadSpec::Playlist(id, random) => {
-                let playlist = storage::read_playlists()?
-                    .into_iter()
-                    .find(|p| p.id == id)
-                    .ok_or("Playlist não encontrada.")?;
-                let mut ids = playlist
-                    .track_ids
-                    .into_iter()
-                    .filter(|id| entries.iter().any(|e| &e.id == id))
-                    .collect::<Vec<_>>();
-                if ids.is_empty() {
-                    return Err("A playlist não possui músicas válidas.".to_string());
-                }
-                if random {
-                    shuffle(&mut ids);
-                }
-                (
-                    ids[0].clone(),
-                    Some(Queue {
-                        ids,
-                        index: 0,
-                        shuffle: random,
-                    }),
-                )
+            LoadSpec::Playlist(id, random) => prepare_queue(
+                &entries,
+                QueueInput::Playlist { playlist_id: id },
+                None,
+                random,
+            )?,
+            LoadSpec::Context(id, context, random) => {
+                prepare_queue(&entries, context, Some(id), random)?
             }
         };
         let entry = entries
@@ -112,12 +105,78 @@ pub(super) fn prepare(spec: LoadSpec) -> Result<Prepared, String> {
         queue,
     })
 }
+
+fn prepare_queue(
+    entries: &[storage::LibraryEntry],
+    context: QueueInput,
+    selected: Option<String>,
+    random: bool,
+) -> Result<(String, Option<Queue>), String> {
+    let (ids, playlist) = match context {
+        QueueInput::Library { track_ids } => (
+            if track_ids.is_empty() {
+                entries.iter().map(|entry| entry.id.clone()).collect()
+            } else {
+                track_ids
+            },
+            None,
+        ),
+        QueueInput::Playlist { playlist_id } => {
+            let playlist = storage::read_playlists()?
+                .into_iter()
+                .find(|playlist| playlist.id == playlist_id)
+                .ok_or("Playlist não encontrada.")?;
+            (
+                playlist.track_ids,
+                Some(QueuePlaylist {
+                    id: playlist.id,
+                    name: playlist.name,
+                }),
+            )
+        }
+    };
+    let by_id = entries
+        .iter()
+        .map(|entry| (entry.id.as_str(), entry))
+        .collect::<std::collections::HashMap<_, _>>();
+    let mut seen = std::collections::HashSet::new();
+    let tracks = ids
+        .into_iter()
+        .filter(|id| seen.insert(id.clone()))
+        .filter_map(|id| {
+            by_id.get(id.as_str()).map(|entry| Track {
+                id: entry.id.clone(),
+                title: entry.title.clone(),
+            })
+        })
+        .collect::<Vec<_>>();
+    if tracks.is_empty() {
+        return Err("A fila não possui músicas disponíveis.".to_string());
+    }
+    let current = if let Some(id) = selected {
+        if !tracks.iter().any(|track| track.id == id) {
+            return Err("A música não está disponível nesta fila.".to_string());
+        }
+        id
+    } else if random {
+        let mut ids = tracks
+            .iter()
+            .map(|track| track.id.clone())
+            .collect::<Vec<_>>();
+        shuffle(&mut ids);
+        ids[0].clone()
+    } else {
+        tracks[0].id.clone()
+    };
+    let queue = Queue::new(tracks, &current, playlist, random);
+    Ok((current, Some(queue)))
+}
 pub(super) fn load(
     sender: &Sender<Command>,
     loader: &Loader,
     token: u64,
     spec: LoadSpec,
-    auto: bool,
+    start: StartMode,
     reply: Option<Sender<Result<Snapshot, String>>>,
     queue: Option<Queue>,
 ) {
@@ -133,7 +192,7 @@ pub(super) fn load(
         let _ = sender.send(Command::Loaded {
             token,
             result,
-            auto,
+            start,
             reply,
         });
     });

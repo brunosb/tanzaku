@@ -1,7 +1,7 @@
 {
     "$schema": "https://schema.tauri.app/config/2",
     "productName": "Tanzaku",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "identifier": "com.tanzaku.desktop.experiment",
     "build": {
         "frontendDist": "../dist",
@@ -37,7 +37,8 @@
             "models/nmp.onnx",
             "runtime/onnxruntime.dll",
             "bin/yt-dlp.exe",
-            "bin/ffmpeg.exe"
+            "bin/ffmpeg.exe",
+            "licenses/**/*"
         ]
     }
 }

@@ -105,7 +105,7 @@ module.exports = async function navigationSmoke({
     )
     await evaluate('window.tanzaku.ready')
     await route('/library')
-    await wait('document.querySelectorAll("tbody tr").length===50')
+    await wait('document.querySelectorAll("tbody tr").length===20')
     const started = Date.now()
     await input('[data-page-search]', ' AGUAS ')
     await wait(
@@ -120,12 +120,12 @@ module.exports = async function navigationSmoke({
         ' AGUAS ',
     )
     await input('[data-page-search]', '')
-    await wait('document.querySelectorAll("tbody tr").length===50')
+    await wait('document.querySelectorAll("tbody tr").length===20')
     await evaluate(
         `document.querySelector('[aria-label="Selecionar página"]').click()`,
     )
     await wait(
-        'document.querySelector(".selection-bar").textContent.includes("50 selecionadas")',
+        'document.querySelector(".selection-bar").textContent.includes("20 selecionadas")',
     )
     await evaluate(
         `document.querySelector('[aria-label="Próxima página"]').click()`,
@@ -135,7 +135,7 @@ module.exports = async function navigationSmoke({
     )
     await evaluate('document.querySelector("tbody [role=checkbox]").click()')
     await wait(
-        'document.querySelector(".selection-bar").textContent.includes("51 selecionadas")',
+        'document.querySelector(".selection-bar").textContent.includes("21 selecionadas")',
     )
     await clickText('.selection-bar button', 'Adicionar à playlist')
     await wait('Boolean(document.querySelector("[role=dialog]"))')
@@ -148,7 +148,7 @@ module.exports = async function navigationSmoke({
     const updated = (await evaluate('window.tanzaku.playlists.list()')).find(
         (p) => p.id === playlist.id,
     )
-    assert(updated.trackIds.length >= 51)
+    assert(updated.trackIds.length >= 21)
     assert.equal(
         await evaluate(
             'getComputedStyle(document.querySelector("[data-sonner-toaster]")).position',
@@ -169,7 +169,7 @@ module.exports = async function navigationSmoke({
         ).includes('referência preservada'),
     )
     await clickText('.hint button', 'Limpar busca para reorganizar')
-    await wait('document.querySelectorAll("tbody tr").length===50')
+    await wait('document.querySelectorAll("tbody tr").length===20')
     // Use actual pointer events to open Radix's menu in the WebView.
     const rect = await evaluate(
         '(()=>{const r=document.querySelector("tbody [data-slot=dropdown-menu-trigger]").getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()',
@@ -224,9 +224,9 @@ module.exports = async function navigationSmoke({
     assert.equal(after.state.status, before.state.status)
     return {
         tracks: entries.length,
-        pageSize: 50,
+        pageSize: 20,
         search10kMs: searchMs,
-        selectedAcrossPages: 51,
+        selectedAcrossPages: 21,
         nativeBulkAndReorder: true,
         preservedPlayback: true,
     }

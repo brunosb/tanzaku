@@ -7,13 +7,9 @@ import {
     Pages,
     SearchField,
 } from '@/features/catalog/components/catalog-controls'
-import {
-    collator,
-    normalize,
-    paginate,
-} from '@/features/catalog/model/catalog-model'
+import { collator, normalize } from '@/features/catalog/model/catalog-model'
 import { type CatalogProps } from '@/features/catalog/model/dialog-actions'
-import { useCatalog, useView } from '@/features/catalog/model/hooks'
+import { useCatalog, usePage, useView } from '@/features/catalog/model/hooks'
 import { type Playlist } from '@/shared/api/contracts'
 import { Button } from '@/shared/ui/button'
 export function PlaylistsPage({ runtime, open }: CatalogProps) {
@@ -34,7 +30,7 @@ export function PlaylistsPage({ runtime, open }: CatalogProps) {
                 : collator.compare(a.name, b.name) *
                   (view.sort === 'name-desc' ? -1 : 1),
         )
-    const page = paginate(result, view.page, 24)
+    const page = usePage(result, view, update)
     return (
         <>
             <header className="page-heading">

@@ -1,5 +1,5 @@
 use crate::music::types::PlaybackPlan;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PlaybackStatus {
@@ -24,6 +24,7 @@ pub struct PlaybackState {
     pub active_event_indices: Vec<usize>,
     pub countdown_remaining: u32,
     pub repeat_enabled: bool,
+    pub auto_advance_enabled: bool,
     pub pause_reason: Option<String>,
     pub error: Option<String>,
 }
@@ -40,6 +41,7 @@ impl Default for PlaybackState {
             active_event_indices: vec![],
             countdown_remaining: 0,
             repeat_enabled: false,
+            auto_advance_enabled: false,
             pause_reason: None,
             error: None,
         }
@@ -50,11 +52,48 @@ pub struct Track {
     pub id: String,
     pub title: String,
 }
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum QueueKind {
+    Library,
+    Playlist,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct QueuePlaylist {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct PlaybackQueue {
+    pub source: QueueKind,
+    pub playlist: Option<QueuePlaylist>,
+    pub mode: &'static str,
+    pub index: usize,
+    pub total: usize,
+    pub previous: Option<Track>,
+    pub next: Option<Track>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum QueueInput {
+    Library {
+        #[serde(rename = "trackIds")]
+        track_ids: Vec<String>,
+    },
+    Playlist {
+        #[serde(rename = "playlistId")]
+        playlist_id: String,
+    },
+}
 #[derive(Clone, Serialize)]
 pub struct Snapshot {
     pub state: PlaybackState,
     pub track: Option<Track>,
     pub plan: PlaybackPlan,
+    pub queue: Option<PlaybackQueue>,
 }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

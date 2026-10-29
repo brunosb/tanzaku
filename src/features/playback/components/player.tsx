@@ -1,5 +1,6 @@
 import { Library, Upload } from 'lucide-react'
 import { useEffect, useRef, useSyncExternalStore } from 'react'
+import { QueueSummary } from '@/features/playback/components/queue-summary'
 import { Status } from '@/features/playback/components/status'
 import { type PlaybackContext } from '@/features/playback/model/context'
 import {
@@ -30,6 +31,7 @@ export function Player({
                     <h1 id="selected">
                         {meta.track?.title ?? 'Seu próximo acorde começa aqui'}
                     </h1>
+                    <QueueSummary queue={meta.queue} />
                 </div>
                 <Status runtime={runtime} />
             </header>

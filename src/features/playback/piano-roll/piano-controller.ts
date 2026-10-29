@@ -34,11 +34,32 @@ export function mountPiano(root: HTMLElement, runtime: PlaybackContext) {
             track,
         ]),
     )
-    const observer = new ResizeObserver((entries) => {
-        viewportWidth = entries[0]?.contentRect.width ?? 0
-    })
+    const fit = () => {
+        viewportWidth = scroll.clientWidth
+        const headings = [
+            ...content.querySelectorAll<HTMLElement>('.group-heading'),
+        ].reduce(
+            (height, heading) =>
+                height + heading.getBoundingClientRect().height,
+            0,
+        )
+        const laneCount = KEY_GROUPS.reduce(
+            (count, group) => count + group.keys.length,
+            0,
+        )
+        // clientHeight excludes the horizontal scrollbar; reserve group borders and rounding.
+        const height = Math.max(
+            14,
+            Math.min(
+                24,
+                Math.floor((scroll.clientHeight - headings - 4) / laneCount),
+            ),
+        )
+        root.style.setProperty('--lane-height', `${height}px`)
+    }
+    const observer = new ResizeObserver(fit)
     observer.observe(scroll)
-    viewportWidth = scroll.clientWidth
+    fit()
     const draw = () => {
         frame = 0
         if (disposed) return

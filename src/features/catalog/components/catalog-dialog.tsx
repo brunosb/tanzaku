@@ -182,7 +182,7 @@ export function CatalogDialog({
                       normalize(p.name).includes(normalize(query)),
                   ),
                   page,
-                  24,
+                  20,
               )
             : null
     const existing = new Set(

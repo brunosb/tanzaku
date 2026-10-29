@@ -10,14 +10,22 @@ pub(crate) fn set_storage_root(root: PathBuf) {
 }
 
 fn default_storage_root() -> PathBuf {
-    dirs::data_dir()
+    dirs::data_local_dir()
+        .or_else(dirs::data_dir)
         .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
         .join("Tanzaku")
 }
 
-fn pointer_roots() -> Vec<PathBuf> {
+pub(crate) fn pointer_roots() -> Vec<PathBuf> {
+    // Isolated development/smoke sessions must never rewrite the user's pointer.
+    if let Some(root) = env::var_os("TANZAKU_DATA_DIR").filter(|value| !value.is_empty()) {
+        return vec![PathBuf::from(root)];
+    }
     let mut roots = Vec::new();
-    for base in [dirs::data_dir(), dirs::config_dir()].into_iter().flatten() {
+    for base in [dirs::data_local_dir(), dirs::data_dir(), dirs::config_dir()]
+        .into_iter()
+        .flatten()
+    {
         let root = base.join("Tanzaku");
         if !roots.contains(&root) {
             roots.push(root);
@@ -88,4 +96,10 @@ pub(crate) fn write_settings_at(
     }
     settings["storageRoot"] = serde_json::json!(root.to_string_lossy());
     save_json(&root.join("settings.json"), &settings)
+}
+
+pub(crate) fn write_auto_advance(enabled: bool) -> Result<(), String> {
+    let mut settings = read_settings()?;
+    settings["autoAdvanceEnabled"] = serde_json::json!(enabled);
+    write_settings_at(&storage_root()?, settings)
 }

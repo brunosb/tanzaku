@@ -13,7 +13,7 @@ Eventos periódicos de reprodução ficam em um armazenamento separado. O piano 
 ## Organização
 
 - A biblioteca filtra por nome sem acentos/caixa, origem e participação em playlists. Nome e ordem de inclusão são as opções de ordenação; datas e durações ausentes não são inventadas.
-- Tabelas têm páginas de 50 músicas; a grade tem páginas de 24 playlists. O checkbox do cabeçalho seleciona a página visível. Seleções, filtros, página e rolagem duram a sessão; trocar de armazenamento limpa esses estados.
+- Tabelas e grade têm páginas de 20 itens. Busca, filtros e ordenação são aplicados antes da paginação; mudanças retornam à primeira página. Exclusões corrigem também a página armazenada. O checkbox do cabeçalho seleciona a página visível. Seleções, filtros, página e rolagem duram a sessão; trocar de armazenamento limpa esses estados.
 - Adição em lote usa um diálogo pesquisável. A playlist admite referências indisponíveis, identificadas visualmente e removidas somente por ação explícita.
 - A ordem salva é editada por Mover acima/abaixo ou Mover para posição. Busca vazia e ordem original são obrigatórias. Ordenar a apresentação por nome não salva uma nova ordem.
 - Reproduzir sempre usa a playlist completa na ordem persistida, ou em modo aleatório. A fila nativa copia os IDs no início; alterações só entram em vigor na próxima execução.

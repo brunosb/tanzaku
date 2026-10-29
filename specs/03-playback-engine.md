@@ -6,6 +6,14 @@ Reprodução manual inicia countdown nativo de cinco segundos. No final, o dispo
 
 O worker é proprietário do estado das teclas. Repetir o mesmo scan code libera o dono anterior antes do novo ataque; um vencimento antigo não libera o novo dono. Mudanças de modificador são enviadas antes do ataque. Eventos visuais são confirmados depois de SendInput retornar sucesso.
 
-Parar limpa a fila e invalida carregamentos/countdown. Pausar e buscar também liberam teclas. A fila só confirma seu próximo índice ao instalar o plano preparado. Próximas faixas preservam o alvo e não repetem countdown. Repetição individual reinicia a música; repetição de playlist reinicia sua fila e embaralha novamente no modo aleatório.
+Parar preserva o contexto da fila e invalida carregamentos/countdown. Pausar e buscar também liberam teclas. A fila só confirma seu próximo índice ao instalar o plano preparado; uma falha preserva plano, posição e fila anteriores, pausados. Próximas faixas automáticas preservam o alvo e não repetem countdown. Trocas manuais repetem a contagem se estavam tocando, em countdown ou pausadas por perda de foco; pausas manuais e parada apenas carregam o destino.
+
+A fila atende biblioteca e playlist. A biblioteca recebe os IDs do resultado completo ordenado na interface; a playlist lê sua ordem original no momento da abertura. Os IDs e a ordem são congelados por execução, mas exclusões e nomes são atualizados. Repetir fila reinicia a lista e, no modo aleatório, prepara outra rodada sem repetição imediata quando há alternativas. A próxima rodada é reservada antes de ser anunciada, para que o próximo título coincida com a faixa efetivamente carregada.
+
+Aleatório mantém a música atual e embaralha as outras faixas em uma nova rodada. O histórico permite voltar e avançar pelas mesmas escolhas, inclusive entre rodadas repetidas. Desativar Aleatório restaura o índice da faixa na ordem original. Metadados da fila entram em Snapshot/playback-plan, separados dos eventos periódicos de posição, e chegam ao renderer por playback.onQueue. Os comandos playback_previous, playback_next e playback_set_shuffle são processados pelo mesmo worker proprietário das teclas.
 
 O encerramento solicita Shutdown e aguarda a liberação antes de terminar o worker. Timings de planejamento e resumo P95/máximo do despacho são registrados para diagnóstico; não medem o processamento interno do jogo.
+
+Avanço automático começa desligado e é persistido em `settings.json` por biblioteca como `autoAdvanceEnabled`. O comando `playback_set_auto_advance` confirma a gravação antes de atualizar o worker; falha na persistência mantém a política anterior. Inicialização e troca de armazenamento restauram a preferência. `PlaybackState.autoAdvanceEnabled` informa o estado confirmado à interface.
+
+Com avanço desligado, o final permanece na faixa atual; Repetir repete somente essa faixa. Com avanço ligado, a fila continua e Repetir reinicia a fila. Anterior/Próxima independem dessa preferência. Desligar durante um carregamento automático invalida o token, libera as teclas e conserva o cursor da faixa atual no estado ended.

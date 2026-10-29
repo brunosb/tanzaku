@@ -57,17 +57,17 @@ test('navigation retains search and selection, opens only on the track name, and
     expect(h.calls.some((c) => c.command === 'playback_start')).toBe(false)
     expect(document.querySelectorAll('.note')).toHaveLength(2)
 })
-test('page checkbox selects 50 and selection can be added across pages without loading', async () => {
+test('page checkbox selects 20 and selection can be added across pages without loading', async () => {
     const h = await mount('/library', 65)
     await h.user.click(
         screen.getByRole('checkbox', { name: 'Selecionar página' }),
     )
-    expect(screen.getByText('50 selecionadas')).toBeInTheDocument()
+    expect(screen.getByText('20 selecionadas')).toBeInTheDocument()
     await h.user.click(screen.getByRole('button', { name: 'Próxima página' }))
     await h.user.click(
         screen.getByRole('checkbox', { name: 'Selecionar página' }),
     )
-    expect(screen.getByText('65 selecionadas')).toBeInTheDocument()
+    expect(screen.getByText('40 selecionadas')).toBeInTheDocument()
     await h.user.click(
         screen.getByRole('button', {
             name: 'Adicionar à playlist',
@@ -81,8 +81,35 @@ test('page checkbox selects 50 and selection can be added across pages without l
     await waitFor(() =>
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     )
-    expect(h.runtime.catalog.get().playlists[0].trackIds).toHaveLength(65)
+    expect(h.runtime.catalog.get().playlists[0].trackIds).toHaveLength(40)
     expect(h.calls.some((c) => c.command === 'playback_load')).toBe(false)
+})
+
+test('search resets pagination and deletion clamps the saved page before entries are added again', async () => {
+    const h = await mount('/library', 41)
+    const next = () => screen.getByRole('button', { name: 'Próxima página' })
+    await h.user.click(next())
+    expect(screen.getByText('21–40 de 41 músicas')).toBeInTheDocument()
+    await h.user.type(screen.getByRole('searchbox'), 'musica 040')
+    await screen.findByText('1–1 de 1 músicas')
+    expect(
+        screen.getByRole('button', { name: 'Página anterior' }),
+    ).toBeDisabled()
+    await h.user.clear(screen.getByRole('searchbox'))
+    await screen.findByText('1–20 de 41 músicas')
+    await h.user.click(next())
+    await h.user.click(next())
+    await act(async () => {
+        await h.api.library.remove('t40')
+        await h.runtime.catalog.reload()
+    })
+    expect(screen.getByText('21–40 de 40 músicas')).toBeInTheDocument()
+    expect(h.runtime.navigation.views.get('library')?.page).toBe(2)
+    await act(async () => {
+        await h.api.library.remove('t39')
+        await h.runtime.catalog.reload()
+    })
+    expect(screen.getByText('21–39 de 39 músicas')).toBeInTheDocument()
 })
 test('simulated playback survives navigation and simultaneous sustains clear after pause', async () => {
     const h = await mount()

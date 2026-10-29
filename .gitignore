@@ -1,4 +1,5 @@
 node_modules/
+.husky/_/
 .venv/
 dist/
 *.log
@@ -12,3 +13,4 @@ midi-cache/settings.json
 .plan-cache/
 src-tauri/target/
 src-tauri/gen/
+src-tauri/licenses/generated/

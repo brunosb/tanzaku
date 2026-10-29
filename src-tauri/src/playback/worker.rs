@@ -2,7 +2,7 @@ use super::{
     controller::{Action, Command},
     events::Publisher,
     keyboard::{Device, Keyboard},
-    loader::{load, LoadSpec, WorkerConfig},
+    loader::{load, LoadSpec, StartMode, WorkerConfig},
     model::{empty_plan, Model},
     types::*,
 };
@@ -37,6 +37,10 @@ pub(super) fn run_worker(
     config: WorkerConfig,
 ) {
     let mut m = Model::new(Instant::now());
+    match &config.auto_advance {
+        Ok(enabled) => m.state.auto_advance_enabled = *enabled,
+        Err(error) => m.state.error = Some(error.clone()),
+    }
     let mut k = Keyboard::new(device);
     let mut waiter = PreciseWaiter::new();
     let mut previous_keys = (false, false);
@@ -52,7 +56,7 @@ pub(super) fn run_worker(
                 Command::Loaded {
                     token,
                     result,
-                    auto,
+                    start,
                     reply,
                 } => {
                     if token != m.token || !m.pending {
@@ -62,16 +66,16 @@ pub(super) fn run_worker(
                         continue;
                     }
                     m.pending = false;
+                    m.automatic_pending = false;
                     let result = result.and_then(|p| {
-                        release(&mut m, &mut k, !auto)?;
-                        let initial_playlist = p.queue.is_some() && !auto;
+                        release(&mut m, &mut k, start != StartMode::Continue)?;
                         m.install(p);
-                        if initial_playlist {
+                        if start == StartMode::Countdown {
                             m.countdown = Some(Instant::now() + config.countdown);
                             m.state.status = PlaybackStatus::Countdown;
                             m.state.countdown_remaining = 5;
                         }
-                        if auto {
+                        if start == StartMode::Continue {
                             if !k.device.focused() {
                                 m.pause(Instant::now(), Some("focus-lost".to_string()));
                                 release(&mut m, &mut k, true)?;
@@ -85,60 +89,88 @@ pub(super) fn run_worker(
                     if let Err(e) = &result {
                         m.state.error = Some(e.clone());
                         m.state.status = PlaybackStatus::Paused;
-                        m.queue = None;
-                        publish(&app, &mut m, &k, false);
+                        m.state.pause_reason = Some("load-error".to_string());
+                        let _ = release(&mut m, &mut k, true);
+                        publish(&app, &mut m, &k, true);
                     }
                     if let Some(reply) = reply {
                         let _ = reply.send(result);
                     }
                 }
                 Command::Request(action, reply) => {
-                    match action {
-                        Action::Load(id) => {
-                            m.cancel();
-                            m.queue = None;
-                            let result = release(&mut m, &mut k, true);
-                            if let Err(e) = result {
-                                let _ = reply.send(Err(e));
+                    if m.pending && matches!(action, Action::Shuffle(_)) {
+                        let _ = reply.send(Err("Aguarde o carregamento.".to_string()));
+                        continue;
+                    }
+                    let request = match &action {
+                        Action::Load(id, context) => Some((
+                            LoadSpec::Context(
+                                id.clone(),
+                                context
+                                    .clone()
+                                    .unwrap_or(QueueInput::Library { track_ids: vec![] }),
+                                m.shuffle_enabled,
+                            ),
+                            StartMode::Loaded,
+                            None,
+                        )),
+                        Action::Playlist(id, random) => Some((
+                            LoadSpec::Playlist(id.clone(), *random),
+                            StartMode::Countdown,
+                            None,
+                        )),
+                        Action::Previous | Action::Next => {
+                            if m.pending {
+                                let _ = reply.send(Err("Aguarde o carregamento.".to_string()));
                                 continue;
                             }
-                            m.state.status = PlaybackStatus::Loading;
-                            m.pending = true;
-                            publish(&app, &mut m, &k, false);
-                            load(
-                                &sender,
-                                &config.loader,
-                                m.token,
-                                LoadSpec::Track(id),
-                                false,
-                                Some(reply),
-                                None,
-                            );
-                            continue;
-                        }
-                        Action::Playlist(id, random) => {
-                            m.cancel();
-                            m.queue = None;
-                            let result = release(&mut m, &mut k, true);
-                            if let Err(e) = result {
-                                let _ = reply.send(Err(e));
+                            let forward = matches!(action, Action::Next);
+                            let Some(queue) = m
+                                .queue
+                                .as_ref()
+                                .and_then(|queue| queue.step(forward, m.state.repeat_enabled))
+                            else {
+                                let _ = reply.send(Ok(m.snapshot()));
                                 continue;
-                            }
-                            m.state.status = PlaybackStatus::Loading;
-                            m.pending = true;
-                            publish(&app, &mut m, &k, false);
-                            load(
-                                &sender,
-                                &config.loader,
-                                m.token,
-                                LoadSpec::Playlist(id, random),
-                                false,
-                                Some(reply),
-                                None,
-                            );
+                            };
+                            let resume = matches!(
+                                m.state.status,
+                                PlaybackStatus::Playing | PlaybackStatus::Countdown
+                            ) || (m.state.status == PlaybackStatus::Paused
+                                && m.state.pause_reason.as_deref() == Some("focus-lost"));
+                            Some((
+                                LoadSpec::Track(queue.current().to_string()),
+                                if resume {
+                                    StartMode::Countdown
+                                } else {
+                                    StartMode::Loaded
+                                },
+                                Some(queue),
+                            ))
+                        }
+                        _ => None,
+                    };
+                    if let Some((spec, start, queue)) = request {
+                        m.state.position = m.position(Instant::now());
+                        m.cancel();
+                        let result = release(&mut m, &mut k, true);
+                        if let Err(e) = result {
+                            let _ = reply.send(Err(e));
                             continue;
                         }
-                        _ => {}
+                        m.state.status = PlaybackStatus::Loading;
+                        m.pending = true;
+                        publish(&app, &mut m, &k, false);
+                        load(
+                            &sender,
+                            &config.loader,
+                            m.token,
+                            spec,
+                            start,
+                            Some(reply),
+                            queue,
+                        );
+                        continue;
                     }
                     let mut plan_changed = false;
                     let shutdown = matches!(action, Action::Shutdown);
@@ -176,7 +208,6 @@ pub(super) fn run_worker(
                             }
                             Action::Stop => {
                                 m.cancel();
-                                m.queue = None;
                                 m.state.status = PlaybackStatus::Stopped;
                                 m.state.position = 0.0;
                                 m.state.current_event_index = 0;
@@ -197,10 +228,39 @@ pub(super) fn run_worker(
                             }
                             Action::Repeat => {
                                 m.state.repeat_enabled = !m.state.repeat_enabled;
+                                plan_changed = true;
+                            }
+                            Action::AutoAdvance(enabled) => {
+                                m.state.auto_advance_enabled = enabled;
+                                if !enabled && m.automatic_pending {
+                                    m.cancel();
+                                    m.state.status = PlaybackStatus::Ended;
+                                    release(&mut m, &mut k, true)?;
+                                }
+                            }
+                            Action::Shuffle(enabled) => {
+                                m.shuffle_enabled = enabled;
+                                if let (Some(queue), Some(track)) = (&mut m.queue, &m.track) {
+                                    queue.set_shuffle(enabled, &track.id);
+                                }
+                                plan_changed = true;
+                            }
+                            Action::RenamePlaylist(id, name) => {
+                                m.renamed_playlists.insert(id.clone(), name.clone());
+                                if let Some(playlist) =
+                                    m.queue.as_mut().and_then(|queue| queue.playlist.as_mut())
+                                {
+                                    if playlist.id == id {
+                                        playlist.name = name;
+                                        plan_changed = true;
+                                    }
+                                }
                             }
                             Action::Clear | Action::Shutdown => {
                                 m.cancel();
                                 m.queue = None;
+                                m.renamed_tracks.clear();
+                                m.renamed_playlists.clear();
                                 release(&mut m, &mut k, true)?;
                                 m.plan = empty_plan();
                                 m.track = None;
@@ -214,14 +274,11 @@ pub(super) fn run_worker(
                                 plan_changed = true;
                             }
                             Action::Remove(id) => {
-                                if let Some(q) = &mut m.queue {
-                                    let current = m.track.as_ref().map(|t| t.id.as_str());
-                                    q.ids.retain(|v| v != &id);
-                                    q.index = current
-                                        .and_then(|id| q.ids.iter().position(|v| v == id))
-                                        .unwrap_or(0);
+                                if m.pending {
+                                    m.pause(Instant::now(), None);
+                                    release(&mut m, &mut k, true)?;
                                 }
-                                if m.track.as_ref().is_some_and(|t| t.id == id) || m.pending {
+                                if m.track.as_ref().is_some_and(|t| t.id == id) {
                                     m.cancel();
                                     m.queue = None;
                                     release(&mut m, &mut k, true)?;
@@ -233,9 +290,17 @@ pub(super) fn run_worker(
                                     m.state.current_event_index = 0;
                                     m.state.generation += 1;
                                     plan_changed = true;
+                                } else if let Some(queue) = &mut m.queue {
+                                    queue.remove(&id);
+                                    plan_changed = true;
                                 }
                             }
                             Action::Rename(id, title) => {
+                                m.renamed_tracks.insert(id.clone(), title.clone());
+                                if let Some(queue) = &mut m.queue {
+                                    queue.rename(&id, &title);
+                                    plan_changed = true;
+                                }
                                 if let Some(t) = &mut m.track {
                                     if t.id == id {
                                         t.title = title;
@@ -244,7 +309,10 @@ pub(super) fn run_worker(
                                 }
                             }
                             Action::Snapshot => {}
-                            Action::Load(_) | Action::Playlist(_, _) => unreachable!(),
+                            Action::Load(_, _)
+                            | Action::Playlist(_, _)
+                            | Action::Previous
+                            | Action::Next => unreachable!(),
                         }
                         Ok(())
                     })();
@@ -265,7 +333,6 @@ pub(super) fn run_worker(
         let keys = k.device.shortcuts();
         if keys.1 && !previous_keys.1 {
             m.cancel();
-            m.queue = None;
             m.state.position = 0.0;
             m.state.current_event_index = 0;
             m.state.status = PlaybackStatus::Stopped;
@@ -361,13 +428,14 @@ pub(super) fn run_worker(
                 if let Some((id, queue)) = m.next() {
                     m.cancel();
                     m.pending = true;
+                    m.automatic_pending = true;
                     m.state.status = PlaybackStatus::Loading;
                     load(
                         &sender,
                         &config.loader,
                         m.token,
                         LoadSpec::Track(id),
-                        true,
+                        StartMode::Continue,
                         None,
                         queue,
                     );

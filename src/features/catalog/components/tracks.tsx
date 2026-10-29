@@ -50,6 +50,7 @@ export function Tracks({
     counts,
     playlist,
     canReorder = false,
+    queueIds,
 }: {
     runtime: CatalogContext
     rows: Row[]
@@ -59,6 +60,7 @@ export function Tracks({
     counts?: Map<string, number>
     playlist?: Playlist
     canReorder?: boolean
+    queueIds?: string[]
 }) {
     const catalog = useCatalog(runtime)
     const meta = useSyncExternalStore(
@@ -68,7 +70,14 @@ export function Tracks({
     const all = rows.length > 0 && rows.every((r) => selected.includes(r.id))
     const some = rows.some((r) => selected.includes(r.id))
     const load = async (id: string) => {
-        await runtime.api.library.open(id)
+        await runtime.api.library.open(
+            id,
+            playlist
+                ? { kind: 'playlist', playlistId: playlist.id }
+                : queueIds
+                  ? { kind: 'library', trackIds: queueIds }
+                  : undefined,
+        )
         runtime.navigate('/player')
     }
     const reorder = (from: number, to: number) => {

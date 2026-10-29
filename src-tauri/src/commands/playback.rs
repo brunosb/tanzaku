@@ -1,16 +1,62 @@
+use super::blocking;
 use super::control;
 use crate::{
     music::types,
-    playback::{Action, PlaybackController, Snapshot},
+    playback::{Action, PlaybackController, QueueInput, Snapshot},
 };
+
+#[tauri::command]
+pub(crate) async fn playback_set_auto_advance(
+    enabled: bool,
+    controller: tauri::State<'_, PlaybackController>,
+) -> Result<(), String> {
+    let controller = controller.inner().clone();
+    blocking(move || {
+        let _guard = crate::library::transaction()?;
+        crate::library::write_auto_advance(enabled)?;
+        controller.request(Action::AutoAdvance(enabled)).map(|_| ())
+    })
+    .await
+}
 #[tauri::command]
 pub(crate) async fn playback_load(
     id: String,
+    context: Option<QueueInput>,
     controller: tauri::State<'_, PlaybackController>,
 ) -> Result<types::PlaybackPlan, String> {
-    Ok(control(controller.inner().clone(), Action::Load(id))
-        .await?
-        .plan)
+    Ok(
+        control(controller.inner().clone(), Action::Load(id, context))
+            .await?
+            .plan,
+    )
+}
+
+#[tauri::command]
+pub(crate) async fn playback_previous(
+    controller: tauri::State<'_, PlaybackController>,
+) -> Result<(), String> {
+    control(controller.inner().clone(), Action::Previous)
+        .await
+        .map(|_| ())
+}
+
+#[tauri::command]
+pub(crate) async fn playback_next(
+    controller: tauri::State<'_, PlaybackController>,
+) -> Result<(), String> {
+    control(controller.inner().clone(), Action::Next)
+        .await
+        .map(|_| ())
+}
+
+#[tauri::command]
+pub(crate) async fn playback_set_shuffle(
+    enabled: bool,
+    controller: tauri::State<'_, PlaybackController>,
+) -> Result<(), String> {
+    control(controller.inner().clone(), Action::Shuffle(enabled))
+        .await
+        .map(|_| ())
 }
 
 #[tauri::command]

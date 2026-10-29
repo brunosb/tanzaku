@@ -8,6 +8,9 @@
         "node": ">=22.12"
     },
     "scripts": {
+        "prepare": "husky",
+        "commitlint": "commitlint",
+        "test:commitlint": "node tools/checks/test-commitlint.cjs",
         "start": "npm run tauri:run",
         "dev": "npm run tauri:run",
         "build": "npm run build:ui",
@@ -16,20 +19,24 @@
         "tauri:ui": "npm run build:ui",
         "tauri:check": "node tools/build/run-cargo.cjs check --manifest-path src-tauri/Cargo.toml",
         "tauri:run": "npm run build:ui && node tools/build/run-cargo.cjs run --manifest-path src-tauri/Cargo.toml",
-        "tauri:build": "node tools/build/run-tauri.cjs build --bundles nsis",
+        "tauri:build": "node tools/release/collect-licenses.cjs && node tools/build/run-tauri.cjs build --bundles nsis",
         "dist": "npm run tauri:build",
         "format": "biome format --write .",
         "format:check": "biome check .",
         "lint": "biome lint .",
         "check": "biome check .",
         "test:renderer": "vitest run",
-        "test:rust": "node tools/build/run-cargo.cjs test --manifest-path src-tauri/Cargo.toml",
-        "test": "npm run check && npm run check:architecture && npm run typecheck && npm run test:renderer && npm run test:rust",
+        "test:rust": "npm run build:ui && node tools/build/run-cargo.cjs test --manifest-path src-tauri/Cargo.toml",
+        "test": "npm run check && npm run check:architecture && npm run check:version && npm run test:commitlint && npm run typecheck && npm run test:renderer && npm run test:rust",
         "test:desktop": "npm run build:ui && node tools/smoke/smoke-tauri.cjs",
-        "check:architecture": "node tools/checks/check-architecture.cjs"
+        "check:architecture": "node tools/checks/check-architecture.cjs",
+        "check:version": "node tools/checks/check-version.cjs",
+        "test:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/release/verify-installer.ps1"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.5.15",
+        "@commitlint/cli": "21.2.4",
+        "@commitlint/config-conventional": "21.2.4",
         "@tailwindcss/vite": "4.3.3",
         "@tauri-apps/cli": "^2.12.3",
         "@testing-library/jest-dom": "7.0.1",
@@ -39,6 +46,7 @@
         "@types/react": "19.3.0",
         "@types/react-dom": "19.3.0",
         "@vitejs/plugin-react": "6.1.2",
+        "husky": "9.1.7",
         "jsdom": "29.1.1",
         "tailwindcss": "4.3.3",
         "tw-animate-css": "1.4.0",
@@ -53,6 +61,7 @@
         "radix-ui": "1.8.1",
         "react": "19.3.1",
         "react-dom": "19.3.1",
+        "recharts": "^3.10.1",
         "sonner": "2.0.8",
         "tailwind-merge": "3.7.0"
     }

@@ -4,7 +4,8 @@ mod json;
 pub(crate) use json::{read_json, save_json};
 mod settings;
 pub(crate) use settings::{
-    ensure_storage, read_settings, set_storage_root, storage_root, write_settings_at,
+    ensure_storage, pointer_roots, read_settings, set_storage_root, storage_root,
+    write_auto_advance, write_settings_at,
 };
 mod playlists;
 pub(crate) use playlists::{

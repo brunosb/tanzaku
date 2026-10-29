@@ -1,7 +1,4 @@
-use super::{
-    loader::{shuffle, Prepared, Queue},
-    types::*,
-};
+use super::{loader::Prepared, queue::Queue, types::*};
 use crate::music::types::PlaybackPlan;
 use std::time::{Duration, Instant};
 pub(super) fn empty_plan() -> PlaybackPlan {
@@ -20,7 +17,11 @@ pub(super) struct Model {
     pub(super) countdown: Option<Instant>,
     pub(super) token: u64,
     pub(super) queue: Option<Queue>,
+    pub(super) shuffle_enabled: bool,
+    pub(super) renamed_tracks: std::collections::HashMap<String, String>,
+    pub(super) renamed_playlists: std::collections::HashMap<String, String>,
     pub(super) pending: bool,
+    pub(super) automatic_pending: bool,
     pub(super) last_emit: Instant,
     pub(super) samples: Vec<TimingSample>,
 }
@@ -35,7 +36,11 @@ impl Model {
             countdown: None,
             token: 0,
             queue: None,
+            shuffle_enabled: false,
+            renamed_tracks: Default::default(),
+            renamed_playlists: Default::default(),
             pending: false,
+            automatic_pending: false,
             last_emit: now,
             samples: vec![],
         }
@@ -45,6 +50,10 @@ impl Model {
             state: self.state.clone(),
             track: self.track.clone(),
             plan: self.plan.clone(),
+            queue: self
+                .queue
+                .as_ref()
+                .map(|queue| queue.snapshot(self.state.repeat_enabled)),
         }
     }
     pub(super) fn position(&self, now: Instant) -> f64 {
@@ -62,6 +71,7 @@ impl Model {
     pub(super) fn cancel(&mut self) {
         self.token = self.token.wrapping_add(1);
         self.pending = false;
+        self.automatic_pending = false;
         self.countdown = None;
         self.state.countdown_remaining = 0;
     }
@@ -79,10 +89,28 @@ impl Model {
         self.state.pause_reason = None;
         self.state.error = None;
     }
-    pub(super) fn install(&mut self, prepared: Prepared) {
+    pub(super) fn install(&mut self, mut prepared: Prepared) {
+        if let Some(title) = self.renamed_tracks.get(&prepared.track.id) {
+            prepared.track.title = title.clone();
+        }
+        if let Some(queue) = &mut prepared.queue {
+            if let Some(playlist) = &mut queue.playlist {
+                if let Some(name) = self.renamed_playlists.get(&playlist.id) {
+                    playlist.name = name.clone();
+                }
+            }
+            for track in &mut queue.tracks {
+                if let Some(title) = self.renamed_tracks.get(&track.id) {
+                    track.title = title.clone();
+                }
+            }
+        }
         self.plan = prepared.plan;
         self.track = Some(prepared.track);
         self.queue = prepared.queue;
+        if let Some(queue) = &self.queue {
+            self.shuffle_enabled = queue.shuffle;
+        }
         self.state.generation += 1;
         self.state.duration = self.plan.duration;
         self.state.position = 0.0;
@@ -117,23 +145,21 @@ impl Model {
         };
     }
     pub(super) fn next(&self) -> Option<(String, Option<Queue>)> {
+        if !self.state.auto_advance_enabled {
+            return self
+                .state
+                .repeat_enabled
+                .then(|| {
+                    self.track
+                        .as_ref()
+                        .map(|track| (track.id.clone(), self.queue.clone()))
+                })
+                .flatten();
+        }
         // Commit the queue cursor only after the prepared track is installed.
-        if let Some(mut queue) = self.queue.clone() {
-            if queue.index + 1 < queue.ids.len() {
-                queue.index += 1;
-            } else if self.state.repeat_enabled {
-                queue.index = 0;
-                if queue.shuffle {
-                    shuffle(&mut queue.ids);
-                }
-            } else {
-                return None;
-            }
-            queue
-                .ids
-                .get(queue.index)
-                .cloned()
-                .map(|id| (id, Some(queue)))
+        if let Some(queue) = &self.queue {
+            let next = queue.step(true, self.state.repeat_enabled)?;
+            Some((next.current().to_string(), Some(next)))
         } else if self.state.repeat_enabled {
             self.track.as_ref().map(|t| (t.id.clone(), None))
         } else {

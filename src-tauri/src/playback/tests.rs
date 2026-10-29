@@ -1,7 +1,7 @@
 use super::{
     keyboard::{Device, Keyboard},
-    loader::Queue,
     model::Model,
+    queue::Queue,
     types::*,
 };
 use crate::music::types::PlaybackPlan;
@@ -73,14 +73,22 @@ fn pause_seek_and_cancel_invalidate_pending_load_and_release() {
     assert_eq!(m.state.status, PlaybackStatus::Paused);
 }
 #[test]
-fn queue_repeat_and_stop_do_not_rearm_or_restart() {
+fn queue_repeat_and_clear_do_not_rearm_or_restart() {
     let now = Instant::now();
     let mut m = Model::new(now);
-    m.queue = Some(Queue {
-        ids: vec!["a".into(), "b".into()],
-        index: 0,
-        shuffle: false,
-    });
+    m.state.auto_advance_enabled = true;
+    m.queue = Some(Queue::new(
+        ["a", "b"]
+            .into_iter()
+            .map(|id| Track {
+                id: id.into(),
+                title: id.into(),
+            })
+            .collect(),
+        "a",
+        None,
+        false,
+    ));
     let (id, queue) = m.next().unwrap();
     assert_eq!(id, "b");
     m.queue = queue;
@@ -90,4 +98,42 @@ fn queue_repeat_and_stop_do_not_rearm_or_restart() {
     m.queue = None;
     m.state.repeat_enabled = false;
     assert!(m.next().is_none());
+}
+
+#[test]
+fn auto_advance_policy_preserves_current_track_for_single_repeat_in_both_orders() {
+    for random in [false, true] {
+        for playlist in [false, true] {
+            let mut m = Model::new(Instant::now());
+            m.track = Some(Track {
+                id: "a".into(),
+                title: "a".into(),
+            });
+            m.queue = Some(Queue::new(
+                ["a", "b"]
+                    .into_iter()
+                    .map(|id| Track {
+                        id: id.into(),
+                        title: id.into(),
+                    })
+                    .collect(),
+                "a",
+                playlist.then(|| QueuePlaylist {
+                    id: "p".into(),
+                    name: "p".into(),
+                }),
+                random,
+            ));
+            assert!(m.next().is_none());
+            m.state.repeat_enabled = true;
+            let (id, queue) = m.next().unwrap();
+            assert_eq!(id, "a");
+            assert_eq!(
+                queue.unwrap().snapshot(false).index,
+                m.queue.as_ref().unwrap().snapshot(false).index
+            );
+            m.state.auto_advance_enabled = true;
+            assert_eq!(m.next().unwrap().0, "b");
+        }
+    }
 }
