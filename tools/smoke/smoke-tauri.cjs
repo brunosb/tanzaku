@@ -7,6 +7,14 @@ const assert = require('node:assert/strict')
 const { spawn } = require('node:child_process')
 const root = path.resolve(__dirname, '../..')
 const data = fs.mkdtempSync(path.join(os.tmpdir(), 'tanzaku-smoke-'))
+const userSettings = path.join(
+    process.env.APPDATA ?? os.homedir(),
+    'Tanzaku',
+    'settings.json',
+)
+const previousUserSettings = fs.existsSync(userSettings)
+    ? fs.readFileSync(userSettings)
+    : null
 const artifacts = path.join(root, 'src-tauri', 'target', 'smoke')
 fs.mkdirSync(path.join(data, 'midi'))
 fs.mkdirSync(artifacts, { recursive: true })
@@ -427,6 +435,11 @@ async function main() {
             true,
         )
         await evaluate('window.tanzaku.playback.setAutoAdvance(false)')
+        assert.deepEqual(
+            fs.existsSync(userSettings) ? fs.readFileSync(userSettings) : null,
+            previousUserSettings,
+            'Storage smoke must preserve the user settings outside its temporary data directory',
+        )
         if (process.env.TANZAKU_CAPTURE_DOCS === '1') {
             await require('./capture-presentation.cjs')({
                 evaluate,
