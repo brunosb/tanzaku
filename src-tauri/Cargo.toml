@@ -1,6 +1,6 @@
 [package]
 name = "tanzaku-tauri-experiment"
-version = "1.0.0"
+version = "1.0.1"
 description = "Tanzaku Tauri experiment"
 authors = ["Tanzaku contributors"]
 edition = "2021"
