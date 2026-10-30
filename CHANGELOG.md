@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/brunosb/tanzaku/compare/v1.0.1...v1.1.0) (2026-10-30)
+
+
+### Features
+
+* add background playback and reduce installer size ([63f176e](https://github.com/brunosb/tanzaku/commit/63f176e577e42ab10dcb464ce7777c646f014e7e))
+* add background playback and reduce installer size ([3be5bb9](https://github.com/brunosb/tanzaku/commit/3be5bb911d29bd3b819ddd056a8f62e54ae42fdb))
+
 ## [1.0.1](https://github.com/brunosb/tanzaku/compare/v1.0.0...v1.0.1) (2026-10-30)
 
 
