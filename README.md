@@ -83,6 +83,8 @@ npm run tauri:run
 | --- | --- |
 | `npm start` | Compilar a interface e executar o aplicativo |
 | `npm test` | Estilo, arquitetura, versões, TypeScript, interface e Rust |
+| `npm run test:node` | Verificações e testes multiplataforma sem Rust |
+| `npm run test:rust` | Compila a interface e executa os testes Rust (Windows no CI) |
 | `npm run test:desktop` | Smoke no WebView2 real, IPC e ONNX, sem enviar teclas |
 | `npm run tauri:build` | Gerar NSIS com recursos e avisos de licença |
 | `npm run test:installer` | Instalar em pasta de teste e validar o app empacotado |
