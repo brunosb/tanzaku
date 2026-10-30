@@ -14,10 +14,18 @@ pub(super) struct WorkerConfig {
     pub(super) countdown: Duration,
     pub(super) loader: Loader,
     pub(super) auto_advance: Result<bool, String>,
+    pub(super) background_playback: Result<bool, String>,
+    pub(super) save_background: fn(bool) -> Result<(), String>,
 }
 impl Default for WorkerConfig {
     fn default() -> Self {
         Self {
+            save_background: |enabled| {
+                let _guard = storage::transaction()?;
+                let mut settings = storage::read_settings()?;
+                settings["backgroundPlaybackEnabled"] = serde_json::json!(enabled);
+                storage::write_settings_at(&storage::storage_root()?, settings)
+            },
             countdown: Duration::from_secs(5),
             loader: std::sync::Arc::new(prepare),
             auto_advance: (|| {
@@ -25,6 +33,12 @@ impl Default for WorkerConfig {
                 Ok(storage::read_settings()?["autoAdvanceEnabled"]
                     .as_bool()
                     .unwrap_or(false))
+            })(),
+            background_playback: (|| {
+                let _guard = storage::transaction()?;
+                Ok(storage::read_settings()?["backgroundPlaybackEnabled"]
+                    .as_bool()
+                    .unwrap_or(true))
             })(),
         }
     }

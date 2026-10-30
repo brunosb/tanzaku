@@ -14,3 +14,10 @@ midi-cache/settings.json
 src-tauri/target/
 src-tauri/gen/
 src-tauri/licenses/generated/
+src-tauri/bin/yt-dlp.exe
+src-tauri/bin/deno.exe
+src-tauri/bin/qjs.exe
+src-tauri/bin/*.dll
+src-tauri/*.dll
+src-tauri/runtime/crt/
+src-tauri/runtime/distribution.json

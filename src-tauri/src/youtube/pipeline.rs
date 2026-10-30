@@ -1,6 +1,6 @@
 use super::{
     jobs::Job,
-    process::{output_text, run},
+    process::{output_text, run, run_with_temp},
     tools::tool_path,
 };
 use crate::{library as storage, transcription};
@@ -49,22 +49,46 @@ pub fn add_youtube(
         .map_err(|e| e.to_string())?;
     let root = temp.path();
     let result = (|| {
-        let yt_dlp = tool_path(app, "yt-dlp.exe")?;
+        let bundled_yt_dlp = tool_path(app, "yt-dlp.exe")?;
+        let mut yt_dlp = super::updater::available_tools(app);
+        yt_dlp.push(bundled_yt_dlp);
         let ffmpeg = tool_path(app, "ffmpeg.exe")?;
+        let quickjs = format!("quickjs:{}", tool_path(app, "qjs.exe")?);
+        let youtube = |args: &[&str]| {
+            let mut options = vec![
+                "--ignore-config",
+                "--no-plugin-dirs",
+                "--no-remote-components",
+                "--no-js-runtimes",
+                "--js-runtimes",
+                &quickjs,
+                "--ffmpeg-location",
+                &ffmpeg,
+            ];
+            options.extend_from_slice(args);
+            let mut errors = Vec::new();
+            for candidate in &yt_dlp {
+                match run_with_temp(&job, candidate, &options, Some(root)) {
+                    Ok(output) => return Ok(output),
+                    Err(error) => {
+                        job.check()?;
+                        eprintln!("Falha no yt-dlp; tentando outra versão disponível: {error}");
+                        errors.push(error);
+                    }
+                }
+            }
+            Err(errors.join("\n"))
+        };
         run(&job, &ffmpeg, &["-version"])
             .map_err(|error| format!("O FFmpeg selecionado não pôde ser executado: {error}"))?;
         job.progress(app, "Obtendo informações do vídeo", None);
-        let metadata = run(
-            &job,
-            &yt_dlp,
-            &[
-                "--no-playlist",
-                "--print",
-                "%(title)s",
-                "--skip-download",
-                source_url,
-            ],
-        )?;
+        let metadata = youtube(&[
+            "--no-playlist",
+            "--print",
+            "%(title)s",
+            "--skip-download",
+            source_url,
+        ])?;
         let title = output_text(&metadata);
         let title = title.lines().last().unwrap_or("Música do YouTube").trim();
         let title = if title.is_empty() {
@@ -76,19 +100,15 @@ pub fn add_youtube(
         job.progress(app, "Baixando áudio", None);
         let pattern = root.join("audio.%(ext)s");
         let pattern = pattern.to_string_lossy().into_owned();
-        run(
-            &job,
-            &yt_dlp,
-            &[
-                "--no-playlist",
-                "--no-warnings",
-                "-f",
-                "bestaudio/best",
-                "-o",
-                &pattern,
-                source_url,
-            ],
-        )?;
+        youtube(&[
+            "--no-playlist",
+            "--no-warnings",
+            "-f",
+            "bestaudio/best",
+            "-o",
+            &pattern,
+            source_url,
+        ])?;
         let source_audio = find_downloaded_audio(root)?;
 
         job.progress(app, "Convertendo para WAV", None);

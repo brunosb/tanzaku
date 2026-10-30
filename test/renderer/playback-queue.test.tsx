@@ -6,6 +6,21 @@ import type { PlaybackQueue } from '../../src/shared/api/contracts'
 import { harness } from '../support/helpers'
 
 const disposers: (() => void)[] = []
+test('background mode defaults on, follows native confirmation and is disabled while playing', async () => {
+    const h = await mount('/library', 8)
+    const toggle = screen.getByRole('button', {
+        name: 'Tocar em segundo plano',
+    })
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    await h.user.click(toggle)
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-pressed', 'false'))
+    expect(h.calls.at(-1)).toEqual({
+        command: 'playback_set_background',
+        args: { enabled: false },
+    })
+    act(() => h.state({ status: 'playing' }))
+    expect(toggle).toBeDisabled()
+})
 afterEach(() => {
     for (const dispose of disposers.splice(0)) dispose()
 })

@@ -68,6 +68,13 @@ export function harness(size = 65) {
                 const id = String(args.id ?? args.playlistId ?? '')
                 const p = playlists.find((p) => p.id === id)
                 switch (command) {
+                    case 'playback_set_background':
+                        snapshot.state.backgroundPlaybackEnabled = Boolean(
+                            args.enabled,
+                        )
+                        snapshot.state.sequence++
+                        emit('playback-state', structuredClone(snapshot.state))
+                        return undefined
                     case 'library_list':
                         return structuredClone(entries)
                     case 'playlist_list':

@@ -7,6 +7,8 @@ export function statusLabel(runtime: PlaybackContext) {
     if (s.status === 'countdown') return `Começa em ${s.countdownRemaining}s`
     if (s.pauseReason === 'focus-lost' && s.status === 'paused')
         return 'Pausado: o jogo perdeu o foco'
+    if (s.pauseReason === 'target-unavailable' && s.status === 'paused')
+        return 'Pausado: o jogo foi fechado ou minimizado'
     return (
         (
             {

@@ -37,6 +37,9 @@
                 "installMode": "currentUser",
                 "installerIcon": "icons/icon.ico",
                 "uninstallerIcon": "icons/icon.ico"
+            },
+            "webviewInstallMode": {
+                "type": "embedBootstrapper"
             }
         },
         "resources": [
@@ -44,7 +47,17 @@
             "runtime/onnxruntime.dll",
             "bin/yt-dlp.exe",
             "bin/ffmpeg.exe",
-            "licenses/**/*"
+            "licenses/**/*",
+            "bin/qjs.exe",
+            "runtime/distribution.json",
+            "msvcp140.dll",
+            "bin/msvcp140.dll",
+            "msvcp140_1.dll",
+            "bin/msvcp140_1.dll",
+            "vcruntime140.dll",
+            "bin/vcruntime140.dll",
+            "vcruntime140_1.dll",
+            "bin/vcruntime140_1.dll"
         ]
     }
 }

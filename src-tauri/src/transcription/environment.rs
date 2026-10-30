@@ -15,7 +15,10 @@ pub(super) fn environment_for_model(model_path: &Path) -> Result<Environment, St
                     .map_err(|error| format!("Falha ao carregar ONNX Runtime nativo: {error}"))?
                     .with_name("tanzaku-basic-pitch")
                     .build(),
-                None => ort::init().with_name("tanzaku-basic-pitch").build(),
+                None => return Err(
+                    "ONNX Runtime não encontrado nos recursos do aplicativo. Reinstale o Tanzaku."
+                        .to_string(),
+                ),
             }
             .map_err(|error| format!("Falha ao iniciar ONNX Runtime: {error}"))
         })

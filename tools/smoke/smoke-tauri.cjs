@@ -397,11 +397,18 @@ async function main() {
         assert.deepEqual(errors, [])
         // Preference persistence and restoring the policy of a selected library.
         await evaluate('window.tanzaku.playback.setAutoAdvance(true)')
+        await evaluate('window.tanzaku.playback.setBackgroundPlayback(false)')
         assert.equal(
             JSON.parse(
                 fs.readFileSync(path.join(data, 'settings.json'), 'utf8'),
             ).autoAdvanceEnabled,
             true,
+        )
+        assert.equal(
+            JSON.parse(
+                fs.readFileSync(path.join(data, 'settings.json'), 'utf8'),
+            ).backgroundPlaybackEnabled,
+            false,
         )
         assert.equal(
             (
@@ -423,6 +430,14 @@ async function main() {
             ).state.autoAdvanceEnabled,
             false,
         )
+        assert.equal(
+            (
+                await evaluate(
+                    'window.__TAURI__.core.invoke("playback_get_snapshot")',
+                )
+            ).state.backgroundPlaybackEnabled,
+            true,
+        )
         await evaluate(
             `window.tanzaku.storage.chooseDirectory(${JSON.stringify(data)})`,
         )
@@ -434,6 +449,15 @@ async function main() {
             ).state.autoAdvanceEnabled,
             true,
         )
+        assert.equal(
+            (
+                await evaluate(
+                    'window.__TAURI__.core.invoke("playback_get_snapshot")',
+                )
+            ).state.backgroundPlaybackEnabled,
+            false,
+        )
+        await evaluate('window.tanzaku.playback.setBackgroundPlayback(true)')
         await evaluate('window.tanzaku.playback.setAutoAdvance(false)')
         assert.deepEqual(
             fs.existsSync(userSettings) ? fs.readFileSync(userSettings) : null,

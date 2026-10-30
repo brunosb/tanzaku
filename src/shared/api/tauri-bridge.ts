@@ -188,6 +188,8 @@ export function createBridge(tauri: TauriGlobal): TanzakuApi {
             },
         },
         playback: {
+            setBackgroundPlayback: (enabled) =>
+                invoke('playback_set_background', { enabled }),
             load,
             previous: () => invoke('playback_previous'),
             next: () => invoke('playback_next'),

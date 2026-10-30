@@ -1,6 +1,14 @@
 use super::jobs::Job;
 use std::process::Command;
 pub(super) fn run(job: &Job, command: &str, args: &[&str]) -> Result<std::process::Output, String> {
+    run_with_temp(job, command, args, None)
+}
+pub(super) fn run_with_temp(
+    job: &Job,
+    command: &str,
+    args: &[&str],
+    temp: Option<&std::path::Path>,
+) -> Result<std::process::Output, String> {
     use std::io::Read;
     job.check()?;
     let mut command_builder = Command::new(command);
@@ -8,6 +16,12 @@ pub(super) fn run(job: &Job, command: &str, args: &[&str]) -> Result<std::proces
         .args(args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
+    if let Some(temp) = temp {
+        command_builder
+            .env("TEMP", temp)
+            .env("TMP", temp)
+            .env("TMPDIR", temp);
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

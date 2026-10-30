@@ -6,7 +6,7 @@ Seu espaço musical em **Where Winds Meet**. Importe MIDIs, organize sua bibliot
 
 [Baixar para Windows](https://github.com/brunosb/tanzaku/releases/latest) · [Reportar um problema](https://github.com/brunosb/tanzaku/issues/new/choose) · [Contribuir](CONTRIBUTING.md)
 
-**Para tocar no jogo, execute o Tanzaku como administrador.** Abra o jogo no modo Música Livre e mantenha sua janela em foco durante a reprodução.
+Abra o jogo no modo Música Livre. Se o jogo exigir administrador, execute o Tanzaku com o mesmo nível de permissão para permitir o envio de notas.
 
 ![Tocador com piano roll completo, fila e forma de onda MIDI](docs/images/player.png)
 
@@ -32,11 +32,11 @@ Seu espaço musical em **Where Winds Meet**. Importe MIDIs, organize sua bibliot
 ## Instalar e tocar
 
 1. Baixe `Tanzaku_<versão>_x64-setup.exe` na [última release](https://github.com/brunosb/tanzaku/releases/latest).
-2. Execute o instalador no Windows 10/11 x64. Ele providencia WebView2 quando necessário.
-3. Inicie o Tanzaku **como administrador** e importe um MIDI pela biblioteca.
-4. Abra a música e clique em Reproduzir. Durante a contagem de cinco segundos, volte ao jogo.
+2. Execute o instalador no Windows 10/11 x64. Se o WebView2 ainda não estiver instalado, será necessário acesso à internet para instalá-lo.
+3. Inicie o Tanzaku e importe um MIDI pela biblioteca.
+4. Abra a música e clique em Reproduzir. Durante a contagem de cinco segundos, foque a janela do jogo.
 
-O instalador inclui FFmpeg, yt-dlp, Basic Pitch ONNX e ONNX Runtime. Para usar o app, não é necessário instalar Node.js, Rust ou Python. A conversão do YouTube requer internet.
+O instalador inclui yt-dlp standalone, QuickJS-NG, FFmpeg de áudio, Basic Pitch ONNX e ONNX Runtime com suas DLLs locais do Visual C++. Não é necessário instalar Node.js, Rust, Python, uv ou FFmpeg. A conversão do YouTube requer internet; o yt-dlp pode receber atualizações oficiais verificadas automaticamente, sem substituir a versão incluída no aplicativo.
 
 Para conferir o download, compare o resultado abaixo com `SHA256SUMS.txt` da release:
 
@@ -47,14 +47,16 @@ Get-FileHash .\Tanzaku_1.0.0_x64-setup.exe -Algorithm SHA256
 | Controle | Comportamento |
 | --- | --- |
 | Reproduzir / Pausar | Inicia com contagem de cinco segundos ou pausa a faixa |
-| Home / End | Pausa / para e cancela transições pendentes |
+| Tocar em segundo plano | Envia as notas à janela capturada do jogo após a contagem; pode ser alterado quando a faixa está pausada |
+| Ctrl+Alt+Home / Ctrl+Alt+End | No segundo plano, pausa / para e cancela transições pendentes |
+| Home / End | No modo que exige foco, pausa / para e cancela transições pendentes |
 | Anterior / Próxima | Navega pela fila, mesmo com avanço automático desligado |
 | Avanço automático | Desligado inicialmente; quando ligado, continua pela fila |
 | Repetir | Repete a faixa atual com avanço desligado, ou a fila com avanço ligado |
 | Aleatório | Percorre as faixas sem repetir na rodada e preserva o histórico |
 | Forma de onda | Permite buscar por clique, arraste ou teclado |
 
-Ao perder o foco do jogo, a reprodução pausa e libera as teclas. Retome explicitamente pelo aplicativo. Trocas manuais durante a reprodução usam uma nova contagem; a continuação automática preserva a janela do jogo e dispensa outra contagem.
+O modo em segundo plano fica ativo por padrão e usa a janela focada no final da contagem inicial, mesmo quando você alterna para outros programas. Fechar ou minimizar o jogo pausa a faixa e libera as teclas. Desative o modo para usar o comportamento anterior, que pausa quando o jogo perde o foco. Trocas manuais durante a reprodução usam uma nova contagem; a continuação automática preserva a janela do jogo e dispensa outra contagem.
 
 A fila da biblioteca usa todo o resultado filtrado e ordenado, incluindo outras páginas. Na playlist, usa a ordem salva completa. Edições posteriores valem para a próxima abertura. A fila e o modo aleatório duram a sessão.
 
@@ -109,6 +111,6 @@ O Release Please prepara uma PR de versão com changelog e manifestos sincroniza
 
 ## Licença
 
-O código do Tanzaku está sob [ISC](LICENSE). Componentes distribuídos mantêm suas próprias licenças, incluindo FFmpeg e yt-dlp sob GPLv3+. Textos, atribuições e referências de código fonte acompanham o instalador em `licenses`; veja os [avisos de terceiros](src-tauri/licenses/README.txt).
+O código do Tanzaku está sob [ISC](LICENSE). Componentes distribuídos mantêm suas próprias licenças, incluindo FFmpeg sob LGPL e o executável do yt-dlp sob GPLv3+. Textos, atribuições e referências de código fonte acompanham o instalador em `licenses`; veja os [avisos de terceiros](src-tauri/licenses/README.txt).
 
 Tanzaku é um projeto da comunidade, sem vínculo oficial com Where Winds Meet.
