@@ -12,6 +12,11 @@ on:
         description: 'Recover publication for an existing release tag (vX.Y.Z); leave empty for CI only'
         required: false
         type: string
+      rebuild_installer:
+        description: 'Rebuild the installer instead of reusing the validated PR artifact'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -216,7 +221,11 @@ jobs:
   publish:
     name: promote validated installer
     needs: [release]
-    if: needs.release.result == 'success' && needs.release.outputs.created == 'true'
+    if: >-
+      always() &&
+      ((needs.release.result == 'success' && needs.release.outputs.created == 'true') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
+      inputs.release_tag != '' && inputs.rebuild_installer != true))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -224,7 +233,7 @@ jobs:
       actions: read
       pull-requests: read
     env:
-      RELEASE_TAG: ${{ needs.release.outputs.tag }}
+      RELEASE_TAG: ${{ needs.release.outputs.tag || inputs.release_tag }}
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
@@ -254,13 +263,15 @@ jobs:
       - name: Stage verified installer for release upload
         run: |
           New-Item -ItemType Directory -Force src-tauri/target/release/bundle/nsis | Out-Null
-          Copy-Item src-tauri/target/release-artifact/Tanzaku_*_x64-setup.exe src-tauri/target/release/bundle/nsis/
+          $installer = Get-ChildItem src-tauri/target/release-artifact -Recurse -File -Filter 'Tanzaku_*_x64-setup.exe'
+          if ($installer.Count -ne 1) { throw "Expected one verified installer, found $($installer.Count)" }
+          Copy-Item $installer[0].FullName src-tauri/target/release/bundle/nsis/
         shell: pwsh
       - run: node tools/release/publish.cjs "$RELEASE_TAG"
 
   recovery-build:
     name: rebuild existing tag (windows)
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_tag != ''
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_tag != '' && inputs.rebuild_installer == true
     runs-on: windows-2022
     timeout-minutes: 60
     permissions:
@@ -342,5 +353,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force src-tauri/target/release/bundle/nsis | Out-Null
-          Copy-Item src-tauri/target/recovery-artifact/Tanzaku_*_x64-setup.exe src-tauri/target/release/bundle/nsis/
+          $installer = Get-ChildItem src-tauri/target/recovery-artifact -Recurse -File -Filter 'Tanzaku_*_x64-setup.exe'
+          if ($installer.Count -ne 1) { throw "Expected one verified installer, found $($installer.Count)" }
+          Copy-Item $installer[0].FullName src-tauri/target/release/bundle/nsis/
       - run: node tools/release/publish.cjs "$RELEASE_TAG"

@@ -217,6 +217,25 @@ test('installer artifact rejects extra files and wrong release versions', (t) =>
     )
 })
 
+test('installer artifact accepts a single nested download-artifact folder', (t) => {
+    const artifact = makeArtifact(t)
+    const originalFiles = fs.readdirSync(artifact.directory)
+    const nested = path.join(artifact.directory, 'downloaded-artifact')
+    fs.mkdirSync(nested)
+    for (const name of originalFiles) {
+        fs.renameSync(
+            path.join(artifact.directory, name),
+            path.join(nested, name),
+        )
+    }
+    assert.equal(
+        artifact.verify().installer.name,
+        'Tanzaku_1.1.0_x64-setup.exe',
+    )
+    fs.writeFileSync(path.join(artifact.directory, 'unexpected.txt'), 'extra')
+    assert.throws(() => artifact.verify(), /only installer and manifest/)
+})
+
 test('recovery artifacts must be built from the release tag commit', (t) => {
     const artifact = makeArtifact(t, {
         manifest: { sourceHeadSha: sha('b'), pullRequest: null },
