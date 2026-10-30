@@ -71,6 +71,11 @@ jobs:
       - run: npm test
       - run: npm run tauri:build
       - run: npm run test:installer
+      - name: Verify fresh install and in-place upgrade
+        env:
+          CI: 'true'
+          TAURI_INSTALLER_CI_SMOKE: '1'
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/release/verify-install-modes.ps1
       - name: Save installer and desktop diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -142,6 +147,11 @@ jobs:
       - run: node tools/checks/check-version.cjs "$env:RELEASE_TAG"
       - run: npm run tauri:build
       - run: npm run test:installer
+      - name: Verify fresh install and in-place upgrade
+        env:
+          CI: 'true'
+          TAURI_INSTALLER_CI_SMOKE: '1'
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/release/verify-install-modes.ps1
       - run: node tools/release/publish.cjs "$env:RELEASE_TAG"
       - name: Save release diagnostics
         if: always()

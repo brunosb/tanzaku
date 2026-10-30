@@ -18,6 +18,8 @@ A configuração usa versão inicial `1.0.0`, manifesto inicialmente vazio e o c
 
 O JSON do Tauri usa `expand: always` no Biome, compatível com a serialização feita pelo Release Please. A validação de formatação continua ativa e não bloqueia PRs de versão por diferenças na expansão dos arrays.
 
+O instalador NSIS usa o template do Tauri 2.12.3 com destino inicial absoluto em `%LOCALAPPDATA%\Tanzaku`. Em instalações existentes, o caminho gravado no registro é preservado; versões mais novas atualizam os arquivos no local existente sem executar o desinstalador. CI valida instalação limpa sem `/D` a partir da pasta do projeto e atualiza uma instalação isolada da release `v1.0.0`, verificando também que arquivos preexistentes sobrevivem.
+
 ## GitHub
 
 PRs usam token de leitura, sem segredos de publicação. Jobs de release executam na `main` com permissões de escrita limitadas ao necessário. Habilite a opção que permite ao GitHub Actions criar PRs em Settings → Actions → General.
