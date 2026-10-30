@@ -1,6 +1,17 @@
 const { spawn } = require('node:child_process')
 const os = require('node:os')
 const path = require('node:path')
+if (
+    process.platform === 'win32' &&
+    process.argv.some((arg) => ['run', 'test', 'check', 'build'].includes(arg))
+) {
+    try {
+        require('../release/prepare-runtime.cjs').prepare()
+    } catch (error) {
+        console.error(error.message)
+        process.exit(1)
+    }
+}
 
 const cargo =
     process.platform === 'win32'

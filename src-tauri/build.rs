@@ -38,6 +38,28 @@ fn is_windows_x64_pe(path: &Path) -> bool {
 fn main() {
     let target = std::env::var("TARGET").unwrap_or_default();
     if target.starts_with("x86_64-pc-windows-") {
+        println!("cargo:rerun-if-changed=../tools/release/runtime-manifest.json");
+        for resource in [
+            "bin/yt-dlp.exe",
+            "bin/qjs.exe",
+            "bin/ffmpeg.exe",
+            "runtime/onnxruntime.dll",
+            "models/nmp.onnx",
+            "msvcp140.dll",
+            "msvcp140_1.dll",
+            "vcruntime140.dll",
+            "vcruntime140_1.dll",
+        ] {
+            println!("cargo:rerun-if-changed={resource}");
+        }
+        let status = std::process::Command::new("node")
+            .args(["../tools/release/prepare-runtime.cjs", "--verify"])
+            .status()
+            .expect("Node.js é necessário apenas para compilar. Execute npm run runtime:prepare.");
+        assert!(
+            status.success(),
+            "Recursos de distribuição inválidos. Execute npm run runtime:prepare."
+        );
         let ffmpeg = Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap())
             .join("bin")
             .join("ffmpeg.exe");

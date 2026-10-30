@@ -17,6 +17,8 @@ pub enum Action {
     Next,
     Shuffle(bool),
     AutoAdvance(bool),
+    BackgroundPlayback(bool),
+    RestoreBackground(bool),
     RenamePlaylist(String, String),
     Play,
     Pause,

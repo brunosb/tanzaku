@@ -1,12 +1,14 @@
+#[cfg(any(debug_assertions, test))]
+use std::path::PathBuf;
 use std::{
     fs,
     io::{Read, Seek, SeekFrom},
-    path::{Path, PathBuf},
+    path::Path,
 };
 use tauri::{AppHandle, Manager};
 const PE_MACHINE_AMD64: u16 = 0x8664;
 
-fn is_windows_x64_executable(path: &Path) -> bool {
+pub(super) fn is_windows_x64_executable(path: &Path) -> bool {
     let Ok(metadata) = fs::metadata(path) else {
         return false;
     };
@@ -37,6 +39,7 @@ fn is_windows_x64_executable(path: &Path) -> bool {
         && u16::from_le_bytes([pe_header[4], pe_header[5]]) == PE_MACHINE_AMD64
 }
 
+#[cfg(any(debug_assertions, test))]
 fn is_lfs_pointer(path: &Path) -> bool {
     let Ok(mut file) = fs::File::open(path) else {
         return false;
@@ -46,6 +49,7 @@ fn is_lfs_pointer(path: &Path) -> bool {
     file.read_exact(&mut header).is_ok() && header == prefix
 }
 
+#[cfg(any(debug_assertions, test))]
 fn select_ffmpeg_candidate(
     configured: Option<PathBuf>,
     resource: Option<PathBuf>,
@@ -82,6 +86,7 @@ fn select_ffmpeg_candidate(
     }
 }
 
+#[cfg(debug_assertions)]
 fn ffmpeg_path_candidates() -> Vec<PathBuf> {
     std::env::var_os("PATH")
         .into_iter()
@@ -90,6 +95,7 @@ fn ffmpeg_path_candidates() -> Vec<PathBuf> {
         .collect()
 }
 
+#[cfg(debug_assertions)]
 fn ffmpeg_path(app: &AppHandle) -> Result<String, String> {
     let configured = std::env::var_os("TANZAKU_FFMPEG").map(PathBuf::from);
     let resource = app
@@ -110,13 +116,43 @@ fn ffmpeg_path(app: &AppHandle) -> Result<String, String> {
 }
 
 pub(super) fn tool_path(app: &AppHandle, name: &str) -> Result<String, String> {
+    if !matches!(name, "ffmpeg.exe" | "yt-dlp.exe" | "qjs.exe") {
+        return Err("Ferramenta desconhecida.".to_string());
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        let path = app
+            .path()
+            .resource_dir()
+            .map_err(|error| error.to_string())?
+            .join("bin")
+            .join(name);
+        return bundled_tool(&path);
+    }
+    #[cfg(debug_assertions)]
+    development_tool_path(app, name)
+}
+
+#[cfg(any(not(debug_assertions), test))]
+fn bundled_tool(path: &Path) -> Result<String, String> {
+    if !is_windows_x64_executable(path) {
+        return Err(format!(
+            "O componente {} está ausente ou inválido. Reinstale o Tanzaku.",
+            path.display()
+        ));
+    }
+    Ok(path.to_string_lossy().into_owned())
+}
+
+#[cfg(debug_assertions)]
+fn development_tool_path(app: &AppHandle, name: &str) -> Result<String, String> {
     if name == "ffmpeg.exe" {
         return ffmpeg_path(app);
     }
-    let variable = if name == "yt-dlp.exe" {
-        "TANZAKU_YTDLP"
-    } else {
-        "TANZAKU_FFMPEG"
+    let variable = match name {
+        "yt-dlp.exe" => "TANZAKU_YTDLP",
+        "qjs.exe" => "TANZAKU_QUICKJS",
+        _ => "TANZAKU_FFMPEG",
     };
     if let Ok(path) = std::env::var(variable) {
         if Path::new(&path).is_file() {
@@ -140,6 +176,13 @@ pub(super) fn tool_path(app: &AppHandle, name: &str) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn installed_tool_never_falls_back_to_external_paths() {
+        let missing = std::path::Path::new("not-installed/bin/yt-dlp.exe");
+        assert!(super::bundled_tool(missing)
+            .unwrap_err()
+            .contains("Reinstale"));
+    }
     use std::{
         fs,
         path::{Path, PathBuf},

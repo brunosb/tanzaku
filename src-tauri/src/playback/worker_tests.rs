@@ -20,6 +20,8 @@ use std::{
 #[derive(Clone, Default)]
 struct DeviceProbe {
     focused: Arc<AtomicBool>,
+    available: Arc<AtomicBool>,
+    background: Arc<AtomicBool>,
     arms: Arc<AtomicUsize>,
     strokes: Arc<Mutex<Vec<crate::playback::keyboard::Stroke>>>,
 }
@@ -27,13 +29,29 @@ impl Device for DeviceProbe {
     fn arm(&mut self) -> Result<(), String> {
         self.arms.fetch_add(1, Ordering::SeqCst);
         self.focused.store(true, Ordering::SeqCst);
+        self.available.store(true, Ordering::SeqCst);
         Ok(())
     }
     fn focused(&self) -> bool {
         self.focused.load(Ordering::SeqCst)
     }
+    fn available(&self) -> bool {
+        self.available.load(Ordering::SeqCst)
+            && (self.background.load(Ordering::SeqCst) || self.focused())
+    }
+    fn set_background(&mut self, enabled: bool) {
+        self.background.store(enabled, Ordering::SeqCst);
+    }
+    fn unavailable_reason(&self) -> &'static str {
+        if self.background.load(Ordering::SeqCst) {
+            "target-unavailable"
+        } else {
+            "focus-lost"
+        }
+    }
     fn disarm(&mut self) {
         self.focused.store(false, Ordering::SeqCst);
+        self.available.store(false, Ordering::SeqCst);
     }
     fn send(&mut self, v: &[crate::playback::keyboard::Stroke]) -> Result<(), String> {
         self.strokes.lock().unwrap().extend_from_slice(v);
@@ -65,6 +83,9 @@ struct Harness {
 }
 impl Harness {
     fn new(loader: Loader) -> Self {
+        Self::with_save(loader, |_| Ok(()))
+    }
+    fn with_save(loader: Loader, save_background: fn(bool) -> Result<(), String>) -> Self {
         let (commands, rx) = mpsc::channel();
         let (tx, output) = mpsc::channel();
         let device = DeviceProbe::default();
@@ -80,6 +101,8 @@ impl Harness {
                     countdown: Duration::ZERO,
                     loader,
                     auto_advance: Ok(false),
+                    background_playback: Ok(false),
+                    save_background,
                 },
             )
         });
@@ -210,6 +233,57 @@ fn focus_loss_pauses_even_before_next_attack() {
     assert!(start.elapsed() < Duration::from_millis(50));
     assert_eq!(h.device.arms.load(Ordering::SeqCst), 1);
     assert!(h.device.strokes.lock().unwrap().iter().all(|s| s.up));
+}
+#[test]
+fn background_keeps_playing_after_focus_loss_and_releases_on_target_loss() {
+    assert!(PlaybackState::default().background_playback_enabled);
+    let h = Harness::new(Arc::new(|_| Ok(prepared("a", 0.05, 10.0))));
+    h.controller
+        .request(Action::BackgroundPlayback(true))
+        .unwrap();
+    h.controller
+        .request(Action::Load("a".into(), None))
+        .unwrap();
+    h.controller.request(Action::Play).unwrap();
+    h.wait(|n| matches!(n, Notice::State(s) if s.status == PlaybackStatus::Playing));
+    h.device.focused.store(false, Ordering::SeqCst);
+    h.wait(|n| matches!(n, Notice::Event));
+    let snapshot = h.controller.request(Action::Snapshot).unwrap();
+    assert_eq!(snapshot.state.status, PlaybackStatus::Playing);
+    assert!(h
+        .controller
+        .request(Action::BackgroundPlayback(false))
+        .is_err());
+    assert_eq!(
+        h.controller.request(Action::Snapshot).unwrap().state.status,
+        PlaybackStatus::Playing
+    );
+    h.device.available.store(false, Ordering::SeqCst);
+    h.wait(|n| matches!(n, Notice::State(s) if s.pause_reason.as_deref() == Some("target-unavailable")));
+    let state = h.controller.request(Action::Snapshot).unwrap().state;
+    assert_eq!(state.status, PlaybackStatus::Paused);
+    assert!(state.active_event_indices.is_empty());
+    let strokes = h.device.strokes.lock().unwrap();
+    assert!(strokes.iter().any(|s| s.scan == 0x1e && s.up));
+    assert!(strokes.iter().any(|s| s.scan == 0x2a && s.up));
+}
+#[test]
+fn failed_background_save_does_not_change_the_mode() {
+    let h = Harness::with_save(Arc::new(|_| Ok(prepared("a", 0.0, 1.0))), |_| {
+        Err("disk full".to_string())
+    });
+    assert!(h
+        .controller
+        .request(Action::BackgroundPlayback(true))
+        .is_err());
+    assert!(
+        !h.controller
+            .request(Action::Snapshot)
+            .unwrap()
+            .state
+            .background_playback_enabled
+    );
+    assert!(!h.device.background.load(Ordering::SeqCst));
 }
 #[test]
 fn shutdown_confirms_release_of_sustain_and_modifiers() {

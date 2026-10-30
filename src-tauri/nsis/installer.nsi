@@ -659,6 +659,10 @@ Section Install
 
   !insertmacro CheckIfAppIsRunning "$INSTDIR\${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
 
+  ; These files belonged to the previous Tanzaku bundle and are no longer used.
+  Delete "$INSTDIR\bin\deno.exe"
+  Delete "$INSTDIR\licenses\DENO-LICENSE.txt"
+
   ; Copy main executable
   File "${MAINBINARYSRCPATH}"
 

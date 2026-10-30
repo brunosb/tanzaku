@@ -9,6 +9,13 @@ pub struct Stroke {
 pub trait Device: Send {
     fn arm(&mut self) -> Result<(), String>;
     fn focused(&self) -> bool;
+    fn available(&self) -> bool {
+        self.focused()
+    }
+    fn set_background(&mut self, _enabled: bool) {}
+    fn unavailable_reason(&self) -> &'static str {
+        "focus-lost"
+    }
     fn send(&mut self, events: &[Stroke]) -> Result<(), String>;
     fn disarm(&mut self);
     fn shortcuts(&self) -> (bool, bool) {
@@ -41,8 +48,8 @@ impl<D: Device> Keyboard<D> {
         v
     }
     pub fn press(&mut self, index: usize, keys: &[Key], end: f64) -> Result<(), String> {
-        if !self.device.focused() {
-            return Err("A janela-alvo perdeu o foco.".to_string());
+        if !self.device.available() {
+            return Err("A janela-alvo está indisponível para reprodução.".to_string());
         }
         for key in keys {
             let scan =

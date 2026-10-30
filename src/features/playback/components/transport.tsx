@@ -1,5 +1,6 @@
 import {
     ListEnd,
+    Monitor,
     Music2,
     Pause,
     Play,
@@ -162,6 +163,27 @@ export function Transport({ runtime }: { runtime: PlaybackContext }) {
                     </span>
                 </button>
                 <div className="transport-actions">
+                    <Control
+                        label="Tocar em segundo plano"
+                        size="icon"
+                        variant="ghost"
+                        aria-pressed={state.backgroundPlaybackEnabled}
+                        className={
+                            state.backgroundPlaybackEnabled
+                                ? 'repeat-active'
+                                : ''
+                        }
+                        disabled={busy || playing}
+                        onClick={() =>
+                            run(
+                                runtime.api.playback.setBackgroundPlayback(
+                                    !state.backgroundPlaybackEnabled,
+                                ),
+                            )
+                        }
+                    >
+                        <Monitor />
+                    </Control>
                     <Control
                         label="Aleatório"
                         size="icon"

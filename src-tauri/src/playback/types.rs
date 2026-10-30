@@ -25,6 +25,7 @@ pub struct PlaybackState {
     pub countdown_remaining: u32,
     pub repeat_enabled: bool,
     pub auto_advance_enabled: bool,
+    pub background_playback_enabled: bool,
     pub pause_reason: Option<String>,
     pub error: Option<String>,
 }
@@ -42,6 +43,7 @@ impl Default for PlaybackState {
             countdown_remaining: 0,
             repeat_enabled: false,
             auto_advance_enabled: false,
+            background_playback_enabled: true,
             pause_reason: None,
             error: None,
         }

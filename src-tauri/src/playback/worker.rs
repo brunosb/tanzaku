@@ -42,6 +42,11 @@ pub(super) fn run_worker(
         Err(error) => m.state.error = Some(error.clone()),
     }
     let mut k = Keyboard::new(device);
+    match &config.background_playback {
+        Ok(enabled) => m.state.background_playback_enabled = *enabled,
+        Err(error) => m.state.error = Some(error.clone()),
+    }
+    k.device.set_background(m.state.background_playback_enabled);
     let mut waiter = PreciseWaiter::new();
     let mut previous_keys = (false, false);
     loop {
@@ -76,8 +81,11 @@ pub(super) fn run_worker(
                             m.state.countdown_remaining = 5;
                         }
                         if start == StartMode::Continue {
-                            if !k.device.focused() {
-                                m.pause(Instant::now(), Some("focus-lost".to_string()));
+                            if !k.device.available() {
+                                m.pause(
+                                    Instant::now(),
+                                    Some(k.device.unavailable_reason().to_string()),
+                                );
                                 release(&mut m, &mut k, true)?;
                             } else {
                                 m.begin(Instant::now());
@@ -98,6 +106,21 @@ pub(super) fn run_worker(
                     }
                 }
                 Command::Request(action, reply) => {
+                    if matches!(
+                        action,
+                        Action::BackgroundPlayback(_) | Action::RestoreBackground(_)
+                    ) && (m.pending
+                        || matches!(
+                            m.state.status,
+                            PlaybackStatus::Playing | PlaybackStatus::Countdown
+                        ))
+                    {
+                        let _ =
+                            reply
+                                .send(Err("Pause a reprodução antes de alterar o modo de envio."
+                                    .to_string()));
+                        continue;
+                    }
                     if m.pending && matches!(action, Action::Shuffle(_)) {
                         let _ = reply.send(Err("Aguarde o carregamento.".to_string()));
                         continue;
@@ -176,6 +199,26 @@ pub(super) fn run_worker(
                     let shutdown = matches!(action, Action::Shutdown);
                     let result = (|| -> Result<(), String> {
                         match action {
+                            Action::BackgroundPlayback(enabled)
+                            | Action::RestoreBackground(enabled) => {
+                                if m.pending
+                                    || matches!(
+                                        m.state.status,
+                                        PlaybackStatus::Playing | PlaybackStatus::Countdown
+                                    )
+                                {
+                                    return Err(
+                                        "Pause a reprodução antes de alterar o modo de envio."
+                                            .to_string(),
+                                    );
+                                }
+                                release(&mut m, &mut k, true)?;
+                                if matches!(action, Action::BackgroundPlayback(_)) {
+                                    (config.save_background)(enabled)?;
+                                }
+                                m.state.background_playback_enabled = enabled;
+                                k.device.set_background(enabled);
+                            }
                             Action::Play => {
                                 if m.pending {
                                     return Err("Aguarde o carregamento.".to_string());
@@ -350,7 +393,7 @@ pub(super) fn run_worker(
                 match k.device.arm() {
                     Ok(()) => m.begin(now),
                     Err(e) => {
-                        m.pause(now, Some("focus-lost".to_string()));
+                        m.pause(now, Some(k.device.unavailable_reason().to_string()));
                         m.state.error = Some(e);
                     }
                 }
@@ -364,8 +407,8 @@ pub(super) fn run_worker(
             }
         }
         if m.state.status == PlaybackStatus::Playing {
-            if !k.device.focused() {
-                m.pause(now, Some("focus-lost".to_string()));
+            if !k.device.available() {
+                m.pause(now, Some(k.device.unavailable_reason().to_string()));
                 let _ = release(&mut m, &mut k, true);
                 publish(&app, &mut m, &k, false);
                 continue;

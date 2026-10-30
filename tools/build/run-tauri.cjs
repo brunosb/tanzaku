@@ -1,6 +1,8 @@
 const { spawnSync } = require('node:child_process')
 const os = require('node:os')
 const path = require('node:path')
+if (process.platform === 'win32')
+    require('../release/prepare-runtime.cjs').prepare()
 
 const cargoBin = path.join(os.homedir(), '.cargo', 'bin')
 const env = {

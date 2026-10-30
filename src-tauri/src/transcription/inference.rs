@@ -283,6 +283,7 @@ fn infer_wav(model_path: &Path, samples: &[f32]) -> Result<InferenceSummary, Str
 }
 
 fn locate_model(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    #[cfg(debug_assertions)]
     if let Ok(path) = std::env::var("TANZAKU_BASIC_PITCH_MODEL") {
         let path = PathBuf::from(path);
         if path.is_file() {
@@ -297,15 +298,17 @@ fn locate_model(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         }
     }
 
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(MODEL_RESOURCE_PATH);
-    if path.is_file() {
-        return Ok(path);
+    #[cfg(debug_assertions)]
+    {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(MODEL_RESOURCE_PATH);
+        if path.is_file() {
+            return Ok(path);
+        }
     }
-
-    Err(format!(
-        "Modelo Basic Pitch não encontrado. Caminho esperado: {}",
-        path.display()
-    ))
+    Err(
+        "Modelo Basic Pitch não encontrado nos recursos do aplicativo. Reinstale o Tanzaku."
+            .to_string(),
+    )
 }
 
 fn inspect_model(path: &Path) -> Result<ModelInfo, String> {

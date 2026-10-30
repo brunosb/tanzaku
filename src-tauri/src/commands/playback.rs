@@ -1,5 +1,18 @@
 use super::blocking;
 use super::control;
+#[tauri::command]
+pub(crate) async fn playback_set_background(
+    enabled: bool,
+    controller: tauri::State<'_, PlaybackController>,
+) -> Result<(), String> {
+    let controller = controller.inner().clone();
+    blocking(move || {
+        controller
+            .request(Action::BackgroundPlayback(enabled))
+            .map(|_| ())
+    })
+    .await
+}
 use crate::{
     music::types,
     playback::{Action, PlaybackController, QueueInput, Snapshot},

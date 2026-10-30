@@ -28,6 +28,7 @@ export type PlaybackState = {
     countdownRemaining: number
     repeatEnabled: boolean
     autoAdvanceEnabled: boolean
+    backgroundPlaybackEnabled: boolean
     pauseReason: string | null
     error: string | null
 }
@@ -96,6 +97,7 @@ export type TanzakuApi = {
         next(): Promise<void>
         setShuffle(enabled: boolean): Promise<void>
         setAutoAdvance(enabled: boolean): Promise<void>
+        setBackgroundPlayback(enabled: boolean): Promise<void>
         play(): Promise<void>
         pause(): Promise<void>
         stop(): Promise<void>
@@ -153,6 +155,7 @@ export function initialState(): PlaybackState {
         countdownRemaining: 0,
         repeatEnabled: false,
         autoAdvanceEnabled: false,
+        backgroundPlaybackEnabled: true,
         pauseReason: null,
         error: null,
     }

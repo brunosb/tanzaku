@@ -65,6 +65,10 @@ pub(crate) fn set_directory(
         .as_bool()
         .unwrap_or(false);
     controller.request(Action::AutoAdvance(enabled))?;
+    let background = storage::read_settings()?["backgroundPlaybackEnabled"]
+        .as_bool()
+        .unwrap_or(true);
+    controller.request(Action::RestoreBackground(background))?;
     Ok(Some(root.to_string_lossy().into_owned()))
 }
 
