@@ -26,12 +26,17 @@ concurrency:
 jobs:
   validate:
     name: validate
-    runs-on: windows-2022
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && inputs.release_tag == '')
+    runs-on: ${{ ((github.event_name == 'pull_request' && startsWith(github.head_ref, 'release-please--')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--'))) && 'ubuntu-latest' || 'windows-2022' }}
     timeout-minutes: 45
+    env:
+      LIGHTWEIGHT: ${{ ((github.event_name == 'pull_request' && startsWith(github.head_ref, 'release-please--')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--'))) && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          lfs: true
+          lfs: ${{ env.LIGHTWEIGHT != 'true' }}
           persist-credentials: false
           fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -39,8 +44,10 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Install pinned Rust toolchain
+        if: env.LIGHTWEIGHT != 'true'
         run: rustup show active-toolchain
       - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
+        if: env.LIGHTWEIGHT != 'true'
         with:
           workspaces: src-tauri -> target
       - run: npm ci
@@ -56,28 +63,35 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: npm run commitlint -- --from "$env:BASE_SHA" --to "$env:HEAD_SHA" --verbose
-      - name: Validate pushed commits
-        if: github.event_name == 'push'
-        env:
-          BASE_SHA: ${{ github.event.before }}
-          HEAD_SHA: ${{ github.sha }}
-        run: npm run commitlint -- --from "$env:BASE_SHA" --to "$env:HEAD_SHA" --verbose
       - name: Validate manually dispatched branch commits
         if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
         run: npm run commitlint -- --from origin/main --to HEAD --verbose
       - name: Validate latest main commit on manual runs
         if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
         run: npm run commitlint -- --last --verbose
-      - run: npm test
-      - run: npm run tauri:build
-      - run: npm run test:installer
+      - name: Validate release metadata and formatting
+        if: env.LIGHTWEIGHT == 'true'
+        run: |
+          npm run check
+          npm run check:version
+          npm run check:installer-template
+      - name: Run full test suite
+        if: env.LIGHTWEIGHT != 'true'
+        run: npm test
+      - name: Build Windows installer
+        if: env.LIGHTWEIGHT != 'true'
+        run: npm run tauri:build
+      - name: Smoke test installed app
+        if: env.LIGHTWEIGHT != 'true'
+        run: npm run test:installer
       - name: Verify fresh install and in-place upgrade
+        if: env.LIGHTWEIGHT != 'true'
         env:
           CI: 'true'
           TAURI_INSTALLER_CI_SMOKE: '1'
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/release/verify-install-modes.ps1
       - name: Save installer and desktop diagnostics
-        if: always()
+        if: always() && runner.os == 'Windows' && github.event_name == 'pull_request'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: windows-validation
@@ -88,13 +102,11 @@ jobs:
 
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
       issues: write
-      actions: write
     outputs:
       tag: ${{ steps.release.outputs.tag_name }}
       created: ${{ steps.release.outputs.release_created }}
@@ -104,23 +116,12 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-      - name: Start CI for release PRs
-        if: steps.release.outputs.prs_created == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_PRS: ${{ steps.release.outputs.prs }}
-        run: |
-          echo "$RELEASE_PRS" | jq -r '.[].headBranchName' | while IFS= read -r branch; do
-            gh workflow run ci.yml --ref "$branch"
-          done
-
   publish:
     if: >-
-      always() && needs.validate.result == 'success' &&
+      always() &&
       ((needs.release.result == 'success' && needs.release.outputs.created == 'true') ||
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_tag != ''))
-    needs: [validate, release]
+    needs: [release]
     runs-on: windows-2022
     timeout-minutes: 45
     permissions:
@@ -144,6 +145,7 @@ jobs:
         with:
           workspaces: src-tauri -> target
       - run: npm ci
+      - run: npm test
       - run: node tools/checks/check-version.cjs "$env:RELEASE_TAG"
       - run: npm run tauri:build
       - run: npm run test:installer
