@@ -9,11 +9,18 @@ if (-not $installPath.StartsWith($releaseRoot + [IO.Path]::DirectorySeparatorCha
 # Preserve a developer's existing installation registration and shortcuts.
 # CI uses a disposable Windows user, but the same command is also run locally.
 $uninstallKey = 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Uninstall/Tanzaku'
+$installLocationKey = 'HKCU:/Software/tanzaku/Tanzaku'
 $registryBackup = Join-Path $releaseRoot 'src-tauri/target/installer-registration.reg'
+$installLocationBackup = Join-Path $releaseRoot 'src-tauri/target/installer-location.reg'
 $hadRegistration = Test-Path -LiteralPath $uninstallKey
+$hadInstallLocation = Test-Path -LiteralPath $installLocationKey
 if ($hadRegistration) {
     reg.exe export 'HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Tanzaku' $registryBackup /y | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Could not back up the existing installation registration.' }
+}
+if ($hadInstallLocation) {
+    reg.exe export 'HKCU\Software\tanzaku\Tanzaku' $installLocationBackup /y | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Could not back up the existing installation location.' }
 }
 $shortcutRoots = @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs')) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
 $shortcuts = @{}
@@ -36,6 +43,12 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Could not restore the previous installation registration.' }
     } elseif (Test-Path -LiteralPath $uninstallKey) {
         Remove-Item -LiteralPath 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Uninstall/Tanzaku' -Recurse
+    }
+    if ($hadInstallLocation) {
+        reg.exe import $installLocationBackup | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'Could not restore the previous installation location.' }
+    } elseif (Test-Path -LiteralPath $installLocationKey) {
+        Remove-Item -LiteralPath $installLocationKey -Recurse
     }
     foreach ($shortcutRoot in $shortcutRoots) {
         Get-ChildItem -LiteralPath $shortcutRoot -Filter 'Tanzaku.lnk' -File -Recurse | ForEach-Object {
