@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/brunosb/tanzaku/compare/v1.0.0...v1.0.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* correct NSIS install defaults and upgrades ([d65533c](https://github.com/brunosb/tanzaku/commit/d65533cfb3834b7befab55029bb7163867852dda))
+* correct NSIS install defaults and upgrades ([b367fc4](https://github.com/brunosb/tanzaku/commit/b367fc4f23a968390b83f3eb57f4fc6c3fd8a48d))
+
 ## 1.0.0 (2026-10-29)
 
 
