@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1](https://github.com/brunosb/tanzaku/compare/v1.1.0...v1.1.1) (2026-10-31)
+
+
+### Bug Fixes
+
+* **ci:** promote nested release artifact ([04f639a](https://github.com/brunosb/tanzaku/commit/04f639acb74f7133f5f2f6f40f70eeca5c93ce89))
+* **ci:** promote nested release artifact ([c7826d8](https://github.com/brunosb/tanzaku/commit/c7826d82bfc861cf84a5e69c255e7510e6b7dbf6))
+
 ## [1.1.0](https://github.com/brunosb/tanzaku/compare/v1.0.1...v1.1.0) (2026-10-30)
 
 
