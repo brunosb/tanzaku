@@ -8,7 +8,7 @@ O Tanzaku usa SemVer e Conventional Commits, começando em `1.0.0`: `fix` gera p
 2. O push na `main` executa Release Please, sem repetir a suíte já exigida nas PRs de código.
 3. A PR de versão atualiza changelog, manifesto de release, npm e lockfile, Tauri, Cargo e a entrada do app no lockfile Rust. A classificação leve só vale para a branch exata do Release Please, aberta pelo bot neste repositório; o workflow confere também a lista permitida de arquivos. Seu job Windows compila e testa o instalador daquela versão uma única vez.
 4. O proprietário aprova a execução do bot se o GitHub solicitar e mescla a PR após o check. Releases futuras não têm auto merge.
-5. Release Please cria a tag `vX.Y.Z` e um rascunho. O job `publish` encontra a PR de release associada à tag, baixa o instalador já testado e confere a versão, árvore de código, PR de origem, tamanho e SHA-256 antes de anexar o `.exe` e `SHA256SUMS.txt`. Não recompila nem repete a suíte. Se a execução ou o artefato não puderem ser identificados sem ambiguidade, nada é publicado.
+5. Release Please cria a tag `vX.Y.Z` e um rascunho. O job `publish` encontra a PR de release associada à tag, baixa o instalador já testado e confere a versão, árvore de código, PR de origem, tamanho e SHA-256 antes de anexar o `.exe` e `SHA256SUMS.txt`. Não recompila nem repete a suíte. O verificador aceita a pasta criada pelo download do artifact, mas exige exatamente um instalador e um manifesto no mesmo diretório. Se a execução ou o artefato não puderem ser identificados sem ambiguidade, nada é publicado.
 
 Antes do merge da PR de versão, ainda não há tag ou release para download. Essa PR é criada pelo bot do GitHub Actions através do Release Please. O instalador passa por smoke e atualização antes do merge; após o merge, o workflow promove o mesmo binário validado para os assets da release. O artefato temporário é retido por até 90 dias.
 
@@ -30,13 +30,19 @@ A `main` exige PR, check `validate`, branch atualizada e conversas resolvidas. F
 
 ## Recuperar uma publicação
 
-Se build, instalação, testes ou smoke falharem, a release fica em rascunho. Após resolver a causa, repita usando uma tag existente:
+Se a promoção falhar, repita usando a tag existente sem marcar a opção de rebuild. O workflow reutiliza o artifact já validado da PR, sem recompilar:
 
 ```powershell
 gh workflow run ci.yml --ref main -f release_tag=v1.1.0
 ```
 
-Use esse fluxo apenas se o artifact da PR de release tiver expirado ou estiver inválido. O workflow recompila e valida a tag no Windows, então publica o resultado verificado. Assets do rascunho podem ser substituídos; releases já publicadas são preservadas. Corrija o aplicativo com uma nova versão, sem alterar uma tag publicada.
+Se o artifact da PR tiver expirado ou estiver inválido, reconstrua e teste a tag no Windows explicitamente:
+
+```powershell
+gh workflow run ci.yml --ref main -f release_tag=v1.1.0 -f rebuild_installer=true
+```
+
+Assets do rascunho podem ser substituídos; releases já publicadas são preservadas. Corrija o aplicativo com uma nova versão, sem alterar uma tag publicada.
 
 ## Validação
 

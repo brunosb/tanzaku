@@ -21,22 +21,43 @@ function verifyInstallerArtifact({
     )
 
     const directory = path.resolve(artifactDirectory)
-    const entries = fs.readdirSync(directory).sort()
-    assert.equal(
-        entries.length,
-        2,
-        'artifact must contain only installer and manifest',
-    )
-    assert.ok(entries.includes('artifact-manifest.json'))
     const expectedInstaller = `Tanzaku_${version}_x64-setup.exe`
-    assert.ok(
-        entries.includes(expectedInstaller),
-        'versioned x64 installer is missing',
+    const files = []
+    const visit = (current) => {
+        for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+            const fullPath = path.join(current, entry.name)
+            if (entry.isDirectory()) visit(fullPath)
+            else files.push(fullPath)
+        }
+    }
+    visit(directory)
+    const manifests = files.filter(
+        (file) => path.basename(file) === 'artifact-manifest.json',
+    )
+    const installers = files.filter(
+        (file) => path.basename(file) === expectedInstaller,
+    )
+    assert.equal(
+        files.length,
+        2,
+        `artifact must contain only installer and manifest; found: ${
+            files.map((file) => path.relative(directory, file)).join(', ') ||
+            '(none)'
+        }`,
+    )
+    assert.equal(manifests.length, 1, 'artifact manifest must be present once')
+    assert.equal(
+        installers.length,
+        1,
+        'versioned x64 installer must be present once',
+    )
+    assert.equal(
+        path.dirname(manifests[0]),
+        path.dirname(installers[0]),
+        'installer and manifest must be in the same artifact directory',
     )
 
-    const manifest = JSON.parse(
-        fs.readFileSync(path.join(directory, 'artifact-manifest.json'), 'utf8'),
-    )
+    const manifest = JSON.parse(fs.readFileSync(manifests[0], 'utf8'))
     assert.equal(manifest.schemaVersion, 1)
     assert.equal(manifest.releaseTag, tag)
     assert.equal(manifest.version, version)
@@ -78,7 +99,7 @@ function verifyInstallerArtifact({
         )
     }
 
-    const bytes = fs.readFileSync(path.join(directory, expectedInstaller))
+    const bytes = fs.readFileSync(installers[0])
     assert.equal(
         manifest.installer.size,
         bytes.byteLength,
