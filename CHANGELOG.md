@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/brunosb/tanzaku/compare/v1.2.0...v1.3.0) (2026-11-06)
+
+
+### Features
+
+* selecionar partes MIDI por música e importar múltiplos arquivos ([56577d1](https://github.com/brunosb/tanzaku/commit/56577d17101180c37ff39eaf9830742dd7fb026a))
+* selecionar partes MIDI por música e importar múltiplos arquivos ([0f799dd](https://github.com/brunosb/tanzaku/commit/0f799dd9de89d1e46ec7da3876c6eb23c56fbaee))
+
 ## [1.2.0](https://github.com/brunosb/tanzaku/compare/v1.1.1...v1.2.0) (2026-11-06)
 
 
