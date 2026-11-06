@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/brunosb/tanzaku/compare/v1.1.1...v1.2.0) (2026-11-06)
+
+
+### Features
+
+* melhorar reprodução e adicionar configurações e atalhos globais ([1424b4b](https://github.com/brunosb/tanzaku/commit/1424b4b2238809a9da0699695f2866ed29cc3262))
+* melhorar reprodução e adicionar configurações e atalhos globais ([5756684](https://github.com/brunosb/tanzaku/commit/5756684bb69d22dcae44700fdfc5cda3136c43e9))
+
 ## [1.1.1](https://github.com/brunosb/tanzaku/compare/v1.1.0...v1.1.1) (2026-10-31)
 
 
