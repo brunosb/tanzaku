@@ -8,9 +8,16 @@ import {
     type Snapshot,
     type TauriGlobal,
 } from '../../src/shared/api/contracts'
+import { defaultShortcuts } from '../../src/shared/api/settings-defaults'
 import { createBridge } from '../../src/shared/api/tauri-bridge'
 
 export function harness(size = 65) {
+    let settings = {
+        storageRoot: 'C:/isolated',
+        startMode: 'game-focus',
+        shortcuts: { ...defaultShortcuts },
+        shortcutWarnings: [],
+    }
     let entries: LibraryEntry[] = Array.from({ length: size }, (_, i) => ({
         id: `t${i}`,
         title:
@@ -80,7 +87,21 @@ export function harness(size = 65) {
                     case 'playlist_list':
                         return structuredClone(playlists)
                     case 'settings_get':
-                        return { storageRoot: 'C:/isolated' }
+                        return structuredClone(settings)
+                    case 'settings_update':
+                        settings = {
+                            ...settings,
+                            ...(args.value as Partial<typeof settings>),
+                        }
+                        return structuredClone(settings)
+                    case 'app_info':
+                        return {
+                            name: 'Tanzaku',
+                            version: '9.8.7',
+                            author: 'brunosb',
+                            repositoryUrl: 'https://github.com/brunosb/tanzaku',
+                            license: 'ISC',
+                        }
                     case 'playback_get_snapshot':
                         return structuredClone(snapshot)
                     case 'playback_set_auto_advance':
@@ -217,6 +238,7 @@ export function harness(size = 65) {
                         }
                         return structuredClone(entries)
                     case 'storage_choose_directory':
+                        settings = { ...settings, storageRoot: 'C:/new' }
                         snapshot = {
                             state: {
                                 ...initialState(),

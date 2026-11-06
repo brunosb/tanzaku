@@ -28,7 +28,7 @@ export function AppDialog({
                 }
                 onChanged={() => {
                     runtime.navigation.resetViews()
-                    runtime.navigate('/player')
+                    runtime.navigate('/settings')
                 }}
                 close={close}
             />

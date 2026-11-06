@@ -144,6 +144,11 @@ export function createBridge(tauri: TauriGlobal): TanzakuApi {
         }
     const api: TanzakuApi = {
         ready,
+        app: {
+            info: () => invoke('app_info'),
+            openProjectLink: (target) =>
+                invoke('app_open_project_link', { target }),
+        },
         window: tauri.window.getCurrentWindow(),
         library: {
             list: () => invoke('library_list'),

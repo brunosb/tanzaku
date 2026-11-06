@@ -14,6 +14,7 @@ export type PlaybackState = {
         | 'idle'
         | 'loading'
         | 'countdown'
+        | 'waiting-for-game'
         | 'playing'
         | 'paused'
         | 'stopped'
@@ -75,8 +76,34 @@ export type YoutubeProgress = {
     percent: number | null
 }
 type Subscription<T> = (listener: (value: T) => void) => () => void
+export type ShortcutAction =
+    | 'pause'
+    | 'stop'
+    | 'play'
+    | 'previous'
+    | 'next'
+    | 'seekBackward'
+    | 'seekForward'
+export type AppSettings = {
+    storageRoot: string
+    startMode: 'game-focus' | 'countdown'
+    shortcuts: Record<ShortcutAction, string | null>
+    shortcutWarnings?: string[]
+    [key: string]: unknown
+}
+export type AppInfo = {
+    name: string
+    version: string
+    author: string
+    repositoryUrl: string
+    license: string
+}
 export type TanzakuApi = {
     ready: Promise<void>
+    app: {
+        info(): Promise<AppInfo>
+        openProjectLink(target: 'repository' | 'issues'): Promise<void>
+    }
     window: {
         minimize(): Promise<void>
         toggleMaximize(): Promise<void>
@@ -130,10 +157,8 @@ export type TanzakuApi = {
     onTrack: Subscription<Track | null>
     onYoutubeProgress: Subscription<YoutubeProgress>
     settings: {
-        get(): Promise<{ storageRoot: string; [key: string]: unknown }>
-        update(
-            settings: Record<string, unknown>,
-        ): Promise<Record<string, unknown>>
+        get(): Promise<AppSettings>
+        update(settings: Record<string, unknown>): Promise<AppSettings>
     }
     storage: { chooseDirectory(path?: string): Promise<string | null> }
     transcription: {

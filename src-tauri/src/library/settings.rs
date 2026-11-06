@@ -84,6 +84,7 @@ pub(crate) fn read_settings() -> Result<serde_json::Value, String> {
         return Err("Configurações inválidas.".to_string());
     }
     settings["storageRoot"] = serde_json::json!(storage_root()?.to_string_lossy());
+    crate::preferences::Preferences::from_value(&settings)?.extend(&mut settings);
     Ok(settings)
 }
 

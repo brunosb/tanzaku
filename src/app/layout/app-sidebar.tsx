@@ -1,4 +1,4 @@
-import { FolderCog, Library, ListMusic, Music2 } from 'lucide-react'
+import { Info, Library, ListMusic, Music2, Settings } from 'lucide-react'
 import { collator } from '@/features/catalog/model/catalog-model'
 import { AppLogo } from '@/shared/ui/app-logo'
 import { Button } from '@/shared/ui/button'
@@ -14,7 +14,6 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/shared/ui/sidebar'
-import type { DialogAction } from '../dialogs/app-dialog'
 import { navigate } from '../navigation/navigation-store'
 import type { Runtime } from '../runtime'
 
@@ -23,13 +22,11 @@ export function AppSidebar({
     route,
     playlistId,
     storageRoot,
-    openDialog,
 }: {
     catalog: ReturnType<Runtime['catalog']['get']>
     route: string
     playlistId: string
     storageRoot: string
-    openDialog: (action: DialogAction) => void
 }) {
     return (
         <Sidebar collapsible="none" className="navigation">
@@ -127,14 +124,28 @@ export function AppSidebar({
                 </SidebarGroup>
             </SidebarContent>
             <SidebarFooter>
-                <Button
-                    variant="ghost"
-                    className="storage-button"
-                    onClick={() => openDialog({ kind: 'storage' })}
-                >
-                    <FolderCog />
-                    <span>Armazenamento</span>
-                </Button>
+                <SidebarMenu>
+                    {[
+                        {
+                            path: '/settings',
+                            name: 'Configurações',
+                            icon: Settings,
+                        },
+                        { path: '/about', name: 'Sobre', icon: Info },
+                    ].map((item) => (
+                        <SidebarMenuItem key={item.path}>
+                            <SidebarMenuButton
+                                asChild
+                                isActive={route === item.path}
+                            >
+                                <a href={`#${item.path}`}>
+                                    <item.icon />
+                                    <span>{item.name}</span>
+                                </a>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    ))}
+                </SidebarMenu>
                 <small title={storageRoot} id="folder-name">
                     {storageRoot}
                 </small>

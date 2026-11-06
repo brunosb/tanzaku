@@ -4,6 +4,7 @@ use crate::{
     playback::{Action, PlaybackController},
     youtube,
 };
+use tauri::Manager;
 pub(crate) fn set_directory(
     mut root: std::path::PathBuf,
     controller: &PlaybackController,
@@ -38,6 +39,7 @@ pub(crate) fn set_directory(
     if !settings.is_object() {
         return Err("Configurações inválidas.".to_string());
     }
+    let preferences = crate::preferences::Preferences::from_value(&settings)?;
 
     jobs.cancel_all();
     controller.request(Action::Clear)?;
@@ -69,12 +71,14 @@ pub(crate) fn set_directory(
         .as_bool()
         .unwrap_or(true);
     controller.request(Action::RestoreBackground(background))?;
+    controller.request(Action::StartMode(preferences.start_mode))?;
     Ok(Some(root.to_string_lossy().into_owned()))
 }
 
 #[tauri::command]
 
 pub(crate) async fn storage_choose_directory(
+    app: tauri::AppHandle,
     controller: tauri::State<'_, PlaybackController>,
     jobs: tauri::State<'_, youtube::Jobs>,
 ) -> Result<Option<String>, String> {
@@ -87,7 +91,7 @@ pub(crate) async fn storage_choose_directory(
         else {
             return Ok(None);
         };
-        set_directory(root, &controller, &jobs)
+        switch_directory(root, &app, &controller, &jobs)
     })
     .await
 }
@@ -95,6 +99,7 @@ pub(crate) async fn storage_choose_directory(
 #[tauri::command]
 
 pub(crate) async fn storage_set_directory(
+    app: tauri::AppHandle,
     path: String,
     controller: tauri::State<'_, PlaybackController>,
     jobs: tauri::State<'_, youtube::Jobs>,
@@ -102,8 +107,9 @@ pub(crate) async fn storage_set_directory(
     let controller = controller.inner().clone();
     let jobs = jobs.inner().clone();
     blocking(move || {
-        set_directory(
+        switch_directory(
             std::path::PathBuf::from(path.trim().trim_matches('"')),
+            &app,
             &controller,
             &jobs,
         )
@@ -113,29 +119,79 @@ pub(crate) async fn storage_set_directory(
 
 #[tauri::command]
 
-pub(crate) async fn settings_get() -> Result<serde_json::Value, String> {
+pub(crate) async fn settings_get(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     blocking(move || {
         let _guard = storage::transaction()?;
-        storage::read_settings()
+        let mut settings = storage::read_settings()?;
+        settings["shortcutWarnings"] =
+            serde_json::json!(app.state::<crate::shortcuts::Shortcuts>().warnings());
+        Ok(settings)
     })
     .await
 }
 
 #[tauri::command]
 
-pub(crate) async fn settings_update(value: serde_json::Value) -> Result<serde_json::Value, String> {
+pub(crate) async fn settings_update(
+    app: tauri::AppHandle,
+    value: serde_json::Value,
+    controller: tauri::State<'_, PlaybackController>,
+) -> Result<serde_json::Value, String> {
+    let controller = controller.inner().clone();
     blocking(move || {
-        let _guard = storage::transaction()?;
-        let mut settings = storage::read_settings()?;
+        let shortcuts = app.state::<crate::shortcuts::Shortcuts>();
+        let _operation = shortcuts.operation.lock().map_err(|e| e.to_string())?;
+        let mut settings = {
+            let _guard = storage::transaction()?;
+            storage::read_settings()?
+        };
         if let Some(next) = value.as_object() {
             for (key, value) in next {
-                if key != "storageRoot" {
+                if key != "storageRoot" && key != "shortcutWarnings" {
                     settings[key] = value.clone();
                 }
             }
         }
-        storage::write_settings_at(&storage::storage_root()?, settings.clone())?;
+        let preferences = crate::preferences::Preferences::from_value(&settings)?;
+        preferences.extend(&mut settings);
+        shortcuts.replace(&app, &preferences.shortcuts, || {
+            let _guard = storage::transaction()?;
+            // Re-read so unrelated worker preferences saved in the meantime survive.
+            let mut current = storage::read_settings()?;
+            if let Some(next) = value.as_object() {
+                for (key, value) in next {
+                    if key != "storageRoot" && key != "shortcutWarnings" {
+                        current[key] = value.clone();
+                    }
+                }
+            }
+            preferences.extend(&mut current);
+            storage::write_settings_at(&storage::storage_root()?, current.clone())?;
+            settings = current;
+            Ok(())
+        })?;
+        controller.request(Action::StartMode(preferences.start_mode))?;
+        settings["shortcutWarnings"] = serde_json::json!([]);
         Ok(settings)
     })
     .await
+}
+
+fn switch_directory(
+    root: std::path::PathBuf,
+    app: &tauri::AppHandle,
+    controller: &PlaybackController,
+    jobs: &youtube::Jobs,
+) -> Result<Option<String>, String> {
+    let shortcuts = app.state::<crate::shortcuts::Shortcuts>();
+    let _operation = shortcuts.operation.lock().map_err(|e| e.to_string())?;
+    let result = set_directory(root, controller, jobs)?;
+    if result.is_some() {
+        let preferences = {
+            let _guard = storage::transaction()?;
+            crate::preferences::Preferences::from_value(&storage::read_settings()?)?
+        };
+        shortcuts.restore(app, &preferences.shortcuts);
+    }
+    Ok(result)
 }

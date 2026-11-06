@@ -20,6 +20,8 @@ Abra o jogo no modo Música Livre. Se o jogo exigir administrador, execute o Tan
 - Paginação de 20 itens, com seleção preservada entre páginas.
 - Reprodução sequencial ou aleatória, velocidade ajustável e busca pela forma de onda.
 - Avanço automático opcional, com escolha salva por biblioteca.
+- Início ao focar o jogo, continuidade em segundo plano e atalhos globais configuráveis.
+- Páginas de Configurações e Sobre, com pasta da biblioteca e versão do aplicativo.
 
 ![Biblioteca com busca, filtros, seleção e paginação](docs/images/library.png)
 
@@ -34,7 +36,7 @@ Abra o jogo no modo Música Livre. Se o jogo exigir administrador, execute o Tan
 1. Baixe `Tanzaku_<versão>_x64-setup.exe` na [última release](https://github.com/brunosb/tanzaku/releases/latest).
 2. Execute o instalador no Windows 10/11 x64. Se o WebView2 ainda não estiver instalado, será necessário acesso à internet para instalá-lo.
 3. Inicie o Tanzaku e importe um MIDI pela biblioteca.
-4. Abra a música e clique em Reproduzir. Durante a contagem de cinco segundos, foque a janela do jogo.
+4. Abra a música, clique em Reproduzir e foque o jogo. O Tanzaku reconhece `wwm.exe` e começa imediatamente. Nas Configurações, você também pode escolher uma contagem de três segundos.
 
 O instalador inclui yt-dlp standalone, QuickJS-NG, FFmpeg de áudio, Basic Pitch ONNX e ONNX Runtime com suas DLLs locais do Visual C++. Não é necessário instalar Node.js, Rust, Python, uv ou FFmpeg. A conversão do YouTube requer internet; o yt-dlp pode receber atualizações oficiais verificadas automaticamente, sem substituir a versão incluída no aplicativo.
 
@@ -46,17 +48,23 @@ Get-FileHash .\Tanzaku_1.0.0_x64-setup.exe -Algorithm SHA256
 
 | Controle | Comportamento |
 | --- | --- |
-| Reproduzir / Pausar | Inicia com contagem de cinco segundos ou pausa a faixa |
-| Tocar em segundo plano | Envia as notas à janela capturada do jogo após a contagem; pode ser alterado quando a faixa está pausada |
-| Ctrl+Alt+Home / Ctrl+Alt+End | No segundo plano, pausa / para e cancela transições pendentes |
-| Home / End | No modo que exige foco, pausa / para e cancela transições pendentes |
+| Reproduzir / Pausar | Aguarda o foco no jogo para iniciar; pausa também cancela a espera |
+| Tocar em segundo plano | Preserva a janela do jogo entre buscas, trocas de faixa e pausas; pode ser alterado quando a faixa está pausada |
+| Ctrl+Alt+Home / Ctrl+Alt+End | Pausa / para e cancela transições pendentes |
+| Ctrl+Alt+Insert | Reproduz ou continua; retoma imediatamente uma sessão válida em segundo plano |
+| Ctrl+Alt+PageUp / Ctrl+Alt+PageDown | Faixa anterior / próxima |
+| Ctrl+Alt+← / Ctrl+Alt+→ | Retrocede / avança cinco segundos sem alterar o estado de pausa |
 | Anterior / Próxima | Navega pela fila, mesmo com avanço automático desligado |
 | Avanço automático | Desligado inicialmente; quando ligado, continua pela fila |
 | Repetir | Repete a faixa atual com avanço desligado, ou a fila com avanço ligado |
 | Aleatório | Percorre as faixas sem repetir na rodada e preserva o histórico |
 | Forma de onda | Permite buscar por clique, arraste ou teclado |
 
-O modo em segundo plano fica ativo por padrão e usa a janela focada no final da contagem inicial, mesmo quando você alterna para outros programas. Fechar ou minimizar o jogo pausa a faixa e libera as teclas. Desative o modo para usar o comportamento anterior, que pausa quando o jogo perde o foco. Trocas manuais durante a reprodução usam uma nova contagem; a continuação automática preserva a janela do jogo e dispensa outra contagem.
+O modo em segundo plano fica ativo por padrão e captura apenas uma janela de `wwm.exe`, continuando mesmo quando você alterna para outros programas. Buscar trechos, abrir outra música, iniciar uma playlist e trocar de faixa durante a reprodução preservam o destino e dispensam outra contagem. Ao arrastar a posição, a música continua até confirmar o novo trecho. Pausar preserva a sessão; Parar encerra o envio e zera a posição. Fechar ou minimizar o jogo pausa a faixa e libera as teclas. Desative o segundo plano para pausar quando o jogo perder o foco.
+
+Os atalhos são globais nos dois modos de envio. Em **Configurações**, altere ou desative cada combinação e salve; combinações duplicadas, teclas musicais e atalhos indisponíveis no Windows são informados. A escolha de início e os atalhos ficam salvos por biblioteca. A contagem alternativa exige que o jogo esteja focado ao terminar. Focar o jogo sozinho nunca inicia uma música sem um comando de reprodução anterior.
+
+Configurações também mostra a pasta dos MIDIs, playlists e preferências. Escolher outra pasta abre a biblioteca do destino, interrompe a reprodução e cancela a conversão após a confirmação; os arquivos atuais permanecem na origem. A página **Sobre** apresenta autor, licença, versão instalada e links do projeto.
 
 A fila da biblioteca usa todo o resultado filtrado e ordenado, incluindo outras páginas. Na playlist, usa a ordem salva completa. Edições posteriores valem para a próxima abertura. A fila e o modo aleatório duram a sessão.
 

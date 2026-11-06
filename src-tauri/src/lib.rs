@@ -4,6 +4,8 @@ mod library;
 mod music;
 mod platform;
 mod playback;
+mod preferences;
+mod shortcuts;
 mod transcription;
 mod youtube;
 pub fn run() {
