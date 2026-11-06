@@ -29,6 +29,21 @@ pub(crate) async fn library_import() -> Result<Option<storage::LibraryEntry>, St
 }
 
 #[tauri::command]
+pub(crate) async fn library_import_many() -> Result<Option<storage::ImportReport>, String> {
+    blocking(|| {
+        let Some(sources) = rfd::FileDialog::new()
+            .add_filter("MIDI", &["mid", "midi"])
+            .pick_files()
+        else {
+            return Ok(None);
+        };
+        let _guard = storage::transaction()?;
+        Ok(Some(storage::import_midis(&sources)))
+    })
+    .await
+}
+
+#[tauri::command]
 
 pub(crate) async fn library_rename(
     id: String,

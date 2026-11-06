@@ -60,6 +60,12 @@ pub(super) struct Prepared {
     pub(super) track: Track,
     pub(super) plan: PlaybackPlan,
     pub(super) queue: Option<Queue>,
+    pub(super) source: Option<std::sync::Arc<MidiSource>>,
+    pub(super) midi_parts: Option<crate::music::types::MidiParts>,
+}
+pub(crate) struct MidiSource {
+    pub(super) document: crate::music::midi::MidiDocument,
+    pub(super) root: std::path::PathBuf,
 }
 pub(super) enum LoadSpec {
     Track(String),
@@ -82,7 +88,7 @@ pub(super) fn shuffle(ids: &mut [String]) {
     }
 }
 pub(super) fn prepare(spec: LoadSpec) -> Result<Prepared, String> {
-    let (entry, path, queue) = {
+    let (entry, path, root, queue) = {
         let _guard = storage::transaction()?;
         let entries = storage::read_library()?;
         let (id, queue) = match spec {
@@ -102,15 +108,16 @@ pub(super) fn prepare(spec: LoadSpec) -> Result<Prepared, String> {
             .find(|e| e.id == id)
             .ok_or("Música não encontrada.")?;
         let path = storage::midi_path(&entry.file)?;
-        (entry, path, queue)
+        (entry, path, storage::storage_root()?, queue)
     };
     let started = Instant::now();
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-    let notes = crate::music::midi::read_notes(&bytes)?;
-    let plan = crate::music::planner::build_playback_plan(&notes);
-    if plan.events.is_empty() {
-        return Err("O MIDI não possui notas utilizáveis.".to_string());
+    let document = crate::music::midi::read_document(&bytes)?;
+    if document.notes.is_empty() {
+        return Err("O MIDI não possui notas.".to_string());
     }
+    let midi_parts = document.selection(entry.selected_part_ids.as_deref())?;
+    let plan = document.plan(&midi_parts.selected_part_ids);
     eprintln!(
         "Plano {}: {} eventos em {:.2} ms",
         entry.title,
@@ -124,6 +131,8 @@ pub(super) fn prepare(spec: LoadSpec) -> Result<Prepared, String> {
         },
         plan,
         queue,
+        source: Some(std::sync::Arc::new(MidiSource { document, root })),
+        midi_parts: Some(midi_parts),
     })
 }
 

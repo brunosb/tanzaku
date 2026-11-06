@@ -81,6 +81,7 @@ pub(crate) fn import_midi(source: &Path) -> Result<LibraryEntry, String> {
         source_url: None,
         duration: None,
         added_at: None,
+        selected_part_ids: None,
     };
     entries.push(entry.clone());
     if let Err(e) = write_library(&entries) {
@@ -117,6 +118,7 @@ pub(crate) fn save_transcribed_midi(
         source_url: Some(source_url.to_string()),
         duration: None,
         added_at: None,
+        selected_part_ids: None,
     };
     entries.push(entry.clone());
     if let Err(e) = write_library(&entries) {
@@ -153,6 +155,35 @@ pub(crate) fn rename_midi(id: &str, title: &str) -> Result<LibraryEntry, String>
         return Err(e);
     }
     Ok(result)
+}
+
+// Caller holds the storage transaction, as for import_midi.
+pub(crate) fn import_midis(paths: &[PathBuf]) -> super::ImportReport {
+    let mut report = super::ImportReport::default();
+    for path in paths {
+        match import_midi(path) {
+            Ok(entry) => report.imported.push(entry),
+            Err(error) => report.failed.push(super::ImportFailure {
+                file_name: path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned(),
+                error,
+            }),
+        }
+    }
+    report
+}
+
+pub(crate) fn save_selected_parts(id: &str, selected: &[String]) -> Result<(), String> {
+    let mut entries = read_library()?;
+    let entry = entries
+        .iter_mut()
+        .find(|entry| entry.id == id)
+        .ok_or("Música não encontrada.")?;
+    entry.selected_part_ids = Some(selected.to_vec());
+    write_library(&entries)
 }
 
 pub(crate) fn delete_midi(id: &str) -> Result<Vec<LibraryEntry>, String> {

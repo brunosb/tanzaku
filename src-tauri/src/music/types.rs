@@ -8,6 +8,27 @@ pub(crate) struct MidiNote {
     pub duration: f64,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct MidiPart {
+    pub id: String,
+    pub track_index: usize,
+    pub channel: u8,
+    pub name: String,
+    pub instrument: Option<String>,
+    pub percussion: bool,
+    pub note_count: usize,
+    pub playable_note_count: usize,
+    pub start_time: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct MidiParts {
+    pub parts: Vec<MidiPart>,
+    pub selected_part_ids: Vec<String>,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Key {

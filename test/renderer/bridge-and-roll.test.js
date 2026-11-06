@@ -8,6 +8,70 @@ const apiModule = import('../../src/shared/api/contracts.ts')
 const rollModule = import(
     '../../src/features/playback/piano-roll/roll-model.ts'
 )
+
+test('MIDI part metadata is separate from position updates and selection uses the snapshot boundary', async () => {
+    const h = await setup()
+    const metadata = []
+    h.api.playback.onMidiParts((parts) => metadata.push(parts))
+    const loaded = {
+        ...song(h),
+        midiParts: {
+            parts: [{ id: '0:0', name: 'Piano' }],
+            selectedPartIds: ['0:0'],
+        },
+    }
+    h.emit('playback-plan', loaded)
+    h.emit('playback-state', {
+        ...loaded.state,
+        status: 'playing',
+        position: 0.5,
+        sequence: 2,
+    })
+    assert.equal(metadata.length, 2)
+    const muted = {
+        ...loaded,
+        plan: { duration: 2, events: [] },
+        midiParts: { ...loaded.midiParts, selectedPartIds: [] },
+        state: {
+            ...loaded.state,
+            status: 'playing',
+            position: 0.5,
+            generation: 2,
+            sequence: 3,
+        },
+    }
+    h.setInvoke((command) =>
+        command === 'playback_set_midi_parts' ? muted : undefined,
+    )
+    const ids = []
+    const changed = h.api.playback.setMidiParts('a', ids)
+    ids.push('0:0')
+    await changed
+    assert.deepEqual(h.calls.at(-1), {
+        command: 'playback_set_midi_parts',
+        args: { trackId: 'a', partIds: [] },
+    })
+    assert.equal(metadata.length, 3)
+    assert.deepEqual(metadata.at(-1).selectedPartIds, [])
+})
+
+test('batch import keeps the individual import command available', async () => {
+    const h = await setup()
+    const entry = { id: 'imported', title: 'Imported', file: 'imported.mid' }
+    const report = {
+        imported: [entry],
+        failed: [{ fileName: 'bad.mid', error: 'Invalid MIDI' }],
+    }
+    h.setInvoke((command) =>
+        command === 'library_import_many' ? report : entry,
+    )
+    assert.deepEqual(await h.api.library.importMany(), report)
+    assert.deepEqual(await h.api.library.import(), entry)
+    assert.deepEqual(
+        h.calls.slice(-2).map((call) => call.command),
+        ['library_import_many', 'library_import'],
+    )
+})
 async function setup() {
     const { createBridge } = await bridgeModule
     const { initialState } = await apiModule

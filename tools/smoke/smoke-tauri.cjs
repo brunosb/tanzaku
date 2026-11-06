@@ -360,6 +360,12 @@ async function main() {
             data,
             artifacts,
         })
+        const midiParts = await require('./smoke-midi-parts.cjs')({
+            evaluate,
+            send,
+            data,
+            artifacts,
+        })
         await evaluate(
             'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
         )
@@ -499,6 +505,7 @@ async function main() {
             presentation,
             navigation,
             settings,
+            midiParts,
             queue,
             youtube: youtubeResult,
             events: plan.events.length,

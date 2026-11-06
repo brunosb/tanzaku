@@ -38,6 +38,8 @@ pub fn run() {
             commands::about::app_open_project_link,
             commands::library::library_list,
             commands::library::library_import,
+            commands::library::library_import_many,
+            commands::playback::playback_set_midi_parts,
             commands::library::library_rename,
             commands::library::library_delete,
             commands::playback::playback_load,

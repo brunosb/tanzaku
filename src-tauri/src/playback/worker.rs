@@ -76,6 +76,18 @@ pub(super) fn run_worker(
                 Err(_) => return,
             };
             match command {
+                Command::InspectMidi { track_id, reply } => {
+                    let source = if !m.pending
+                        && m.track.as_ref().is_some_and(|track| track.id == track_id)
+                    {
+                        m.source
+                            .clone()
+                            .ok_or_else(|| "O MIDI não está disponível.".to_string())
+                    } else {
+                        Err("A música foi alterada ou ainda está carregando.".to_string())
+                    };
+                    let _ = reply.send(source);
+                }
                 Command::Loaded {
                     token,
                     result,
@@ -122,6 +134,24 @@ pub(super) fn run_worker(
                     }
                 }
                 Command::Request(action, reply) => {
+                    if let Action::ApplyMidiParts {
+                        track_id, source, ..
+                    } = &action
+                    {
+                        if m.pending
+                            || !m.track.as_ref().is_some_and(|track| &track.id == track_id)
+                            || !m
+                                .source
+                                .as_ref()
+                                .is_some_and(|current| std::sync::Arc::ptr_eq(current, source))
+                        {
+                            let _ = reply.send(Err(
+                                "A música foi alterada; a seleção anterior não foi aplicada."
+                                    .into(),
+                            ));
+                            continue;
+                        }
+                    }
                     let action = match action {
                         Action::SeekRelative(delta) => Action::Seek(
                             m.position(Instant::now()) + delta,
@@ -269,8 +299,8 @@ pub(super) fn run_worker(
                                 if m.pending {
                                     return Err("Aguarde o carregamento.".to_string());
                                 }
-                                if m.plan.events.is_empty() {
-                                    return Err("Não há notas carregadas.".to_string());
+                                if m.track.is_none() || m.state.duration <= 0.0 {
+                                    return Err("Não há música carregada.".to_string());
                                 }
                                 if matches!(
                                     m.state.status,
@@ -309,6 +339,14 @@ pub(super) fn run_worker(
                                 }
                             }
                             Action::StartMode(policy) => start_mode = policy,
+                            Action::ApplyMidiParts {
+                                selection, plan, ..
+                            } => {
+                                let released = release(&mut m, &mut k, false);
+                                m.replace_parts(plan, selection, Instant::now());
+                                plan_changed = true;
+                                released?;
+                            }
                             Action::SeekRelative(_) => unreachable!(),
                             Action::Speed(s) => {
                                 m.speed(s, Instant::now());
@@ -352,6 +390,8 @@ pub(super) fn run_worker(
                                 release(&mut m, &mut k, true)?;
                                 m.plan = empty_plan();
                                 m.track = None;
+                                m.source = None;
+                                m.midi_parts = None;
                                 m.state.status = PlaybackStatus::Idle;
                                 m.state.position = 0.0;
                                 m.state.duration = 0.0;
@@ -372,6 +412,8 @@ pub(super) fn run_worker(
                                     release(&mut m, &mut k, true)?;
                                     m.plan = empty_plan();
                                     m.track = None;
+                                    m.source = None;
+                                    m.midi_parts = None;
                                     m.state.status = PlaybackStatus::Idle;
                                     m.state.position = 0.0;
                                     m.state.duration = 0.0;

@@ -6,6 +6,10 @@ Apenas um carregamento de plano reconstrói o DOM. Elementos de notas são guard
 
 React mantém o contêiner; `piano-controller.ts` cria e atualiza as notas fora da reconciliação React. Sair da página desmonta o controlador e cancela animação/observador; voltar reconstrói pela versão atual do plano. A barra de transporte mantém sua animação separada das páginas de catálogo.
 
+O botão Partes do MIDI abre um painel lateral sobreposto, preservando o espaço do piano roll. Cada parte mostra nome, instrumento/canal, quantidade total e no alcance, percussão e horário de entrada. Todas, Nenhuma e Somente esta aplicam e salvam imediatamente, sem nova contagem. Edições rápidas conservam a última intenção, com requests serializados no bridge e no controlador; erros restauram a seleção confirmada. Partes fora do alcance recebem indicação, sem transposição automática.
+
+Um MIDI carregado e silenciado mantém controles de reprodução, busca, repetição e seleção, mesmo sem eventos no plano. A interface distingue nenhuma parte ativa de partes sem notas no alcance, e não volta à tela de importação vazia. Metadados e alterações de plano atualizam a apresentação; os ticks de posição não reconstroem a lista de partes.
+
 O transporte tem duas linhas: música, contexto da fila e controles na primeira; tempos e forma de onda na segunda. O cabeçalho do tocador apresenta a origem, o modo, o índice e a próxima música. Anterior/Próxima e Aleatório são desabilitados durante carregamento/countdown, e destinos ausentes desabilitam a respectiva ação.
 
 A forma de onda usa Recharts com barras de intervalo espelhadas, sem eixos, animação interna ou interação do gráfico. O nível de cada janela deriva da ocupação das notas do plano, normalizada por faixa, preservando silêncios. A quantidade de amostras acompanha a largura entre 48 e 240; o cálculo usa diferenças de intervalos e tem custo linear em eventos mais amostras.

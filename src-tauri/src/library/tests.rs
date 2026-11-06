@@ -7,6 +7,83 @@ struct Scope {
     dir: tempfile::TempDir,
     previous: Option<PathBuf>,
 }
+
+#[test]
+fn bulk_import_keeps_valid_files_and_reports_failures_and_duplicate_names() {
+    let scope = Scope::new();
+    let bytes = crate::music::midi::tests::fixture_bytes();
+    let first = scope.dir.path().join("score.mid");
+    let other_dir = scope.dir.path().join("another-source");
+    fs::create_dir(&other_dir).unwrap();
+    let second = other_dir.join("score.mid");
+    let invalid = scope.dir.path().join("broken.mid");
+    fs::write(&first, &bytes).unwrap();
+    fs::write(&second, &bytes).unwrap();
+    fs::write(&invalid, b"not a MIDI").unwrap();
+    let report = import_midis(&[first.clone(), invalid.clone(), second.clone()]);
+    assert_eq!(report.imported.len(), 2);
+    assert_eq!(report.failed.len(), 1);
+    assert_eq!(report.failed[0].file_name, "broken.mid");
+    assert_eq!(report.imported[0].file, "score.mid");
+    assert_eq!(report.imported[1].file, "score (2).mid");
+    assert_ne!(report.imported[0].id, report.imported[1].id);
+    assert_eq!(read_library().unwrap().len(), 2);
+    assert_eq!(fs::read(first).unwrap(), bytes);
+    assert_eq!(fs::read(second).unwrap(), bytes);
+    assert_eq!(fs::read(invalid).unwrap(), b"not a MIDI");
+    assert!(import_midis(&[]).imported.is_empty());
+}
+
+#[test]
+fn selected_parts_survive_rename_and_playlists_and_old_entries_default_to_all() {
+    let scope = Scope::new();
+    let source = scope.midi();
+    let entry = import_midi(&source).unwrap();
+    let path = midi_path(&entry.file).unwrap();
+    let original = fs::read(&path).unwrap();
+    assert!(entry.selected_part_ids.is_none());
+    save_selected_parts(&entry.id, &[]).unwrap();
+    let renamed = rename_midi(&entry.id, "Renamed parts").unwrap();
+    assert_eq!(renamed.selected_part_ids, Some(vec![]));
+    assert_eq!(
+        fs::read(midi_path(&renamed.file).unwrap()).unwrap(),
+        original
+    );
+    save_selected_parts(&entry.id, &["0:0".into()]).unwrap();
+    assert_eq!(
+        read_library().unwrap()[0].selected_part_ids,
+        Some(vec!["0:0".to_string()])
+    );
+    let file = scope.dir.path().join("library.json");
+    fs::write(&file, b"{broken").unwrap();
+    assert!(save_selected_parts(&entry.id, &[]).is_err());
+    assert_eq!(fs::read(file).unwrap(), b"{broken");
+}
+
+#[cfg(windows)]
+#[test]
+fn bulk_import_and_part_selection_preserve_confirmed_files_after_write_failure() {
+    let scope = Scope::new();
+    let source = scope.midi();
+    let entry = import_midi(&source).unwrap();
+    let file = scope.dir.path().join("library.json");
+    let before = fs::read(&file).unwrap();
+    let permissions = fs::metadata(&file).unwrap().permissions();
+    let mut readonly = permissions.clone();
+    readonly.set_readonly(true);
+    fs::set_permissions(&file, readonly).unwrap();
+    let selection = save_selected_parts(&entry.id, &[]);
+    let report = import_midis(&[source]);
+    fs::set_permissions(&file, permissions).unwrap();
+    assert!(selection.is_err());
+    assert_eq!(report.imported.len(), 0);
+    assert_eq!(report.failed.len(), 1);
+    assert_eq!(fs::read(&file).unwrap(), before);
+    assert_eq!(
+        fs::read_dir(scope.dir.path().join("midi")).unwrap().count(),
+        1
+    );
+}
 impl Scope {
     fn new() -> Self {
         let guard = transaction().unwrap();

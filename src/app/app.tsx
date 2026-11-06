@@ -102,9 +102,13 @@ export function App({ runtime }: { runtime: Runtime }) {
     const importMidi = () =>
         run(
             runtime.catalog
-                .mutate(() => runtime.api.library.import())
-                .then((entry) => {
-                    if (entry)
+                .mutate(() => runtime.api.library.importMany())
+                .then((report) => {
+                    if (!report) return
+                    if (report.failed.length)
+                        openDialog({ kind: 'import-report', report })
+                    const entry = report.imported[0]
+                    if (report.imported.length === 1 && entry)
                         toast.success('Música importada.', {
                             action: {
                                 label: 'Abrir no tocador',
@@ -116,6 +120,16 @@ export function App({ runtime }: { runtime: Runtime }) {
                                     ),
                             },
                         })
+                    else if (report.imported.length > 1)
+                        toast.success(
+                            `${report.imported.length} músicas importadas.`,
+                            {
+                                action: {
+                                    label: 'Ver na biblioteca',
+                                    onClick: () => navigate('/library'),
+                                },
+                            },
+                        )
                 }),
         )
     const close = () => {

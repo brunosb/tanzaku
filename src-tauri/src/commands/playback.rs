@@ -1,6 +1,15 @@
 use super::blocking;
 use super::control;
 #[tauri::command]
+pub(crate) async fn playback_set_midi_parts(
+    track_id: String,
+    part_ids: Vec<String>,
+    controller: tauri::State<'_, PlaybackController>,
+) -> Result<Snapshot, String> {
+    let controller = controller.inner().clone();
+    blocking(move || controller.set_midi_parts(track_id, part_ids)).await
+}
+#[tauri::command]
 pub(crate) async fn playback_set_background(
     enabled: bool,
     controller: tauri::State<'_, PlaybackController>,

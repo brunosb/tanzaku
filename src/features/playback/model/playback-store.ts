@@ -1,5 +1,6 @@
 import {
     initialState,
+    type MidiParts,
     type PlaybackPlan,
     type PlaybackQueue,
     type TanzakuApi,
@@ -16,8 +17,13 @@ export function createPlaybackStore(api: TanzakuApi) {
         plan: { events: [], duration: 0 } as PlaybackPlan,
         version: 0,
         queue: null as PlaybackQueue | null,
+        midiParts: null as MidiParts | null,
     }
     const unsubscribers = [
+        api.playback.onMidiParts((midiParts) => {
+            meta = { ...meta, midiParts }
+            metaSignal.emit()
+        }),
         api.playback.onQueue((queue) => {
             meta = { ...meta, queue }
             metaSignal.emit()

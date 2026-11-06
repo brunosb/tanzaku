@@ -93,11 +93,13 @@ pub enum QueueInput {
     },
 }
 #[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Snapshot {
     pub state: PlaybackState,
     pub track: Option<Track>,
     pub plan: PlaybackPlan,
     pub queue: Option<PlaybackQueue>,
+    pub midi_parts: Option<crate::music::types::MidiParts>,
 }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

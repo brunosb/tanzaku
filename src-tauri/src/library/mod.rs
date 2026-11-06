@@ -1,5 +1,5 @@
 mod models;
-pub(crate) use models::{LibraryEntry, Playlist};
+pub(crate) use models::{ImportFailure, ImportReport, LibraryEntry, Playlist};
 mod json;
 pub(crate) use json::{read_json, save_json};
 mod settings;
@@ -13,7 +13,8 @@ pub(crate) use playlists::{
 };
 mod files;
 pub(crate) use files::{
-    delete_midi, import_midi, midi_path, read_library, rename_midi, save_transcribed_midi,
+    delete_midi, import_midi, import_midis, midi_path, read_library, rename_midi,
+    save_selected_parts, save_transcribed_midi,
 };
 use std::sync::{
     atomic::{AtomicU64, Ordering},

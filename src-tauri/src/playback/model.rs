@@ -24,6 +24,8 @@ pub(super) struct Model {
     pub(super) automatic_pending: bool,
     pub(super) last_emit: Instant,
     pub(super) samples: Vec<TimingSample>,
+    pub(super) source: Option<std::sync::Arc<super::loader::MidiSource>>,
+    pub(super) midi_parts: Option<crate::music::types::MidiParts>,
 }
 impl Model {
     pub(super) fn new(now: Instant) -> Self {
@@ -43,12 +45,15 @@ impl Model {
             automatic_pending: false,
             last_emit: now,
             samples: vec![],
+            source: None,
+            midi_parts: None,
         }
     }
     pub(super) fn snapshot(&self) -> Snapshot {
         Snapshot {
             state: self.state.clone(),
             track: self.track.clone(),
+            midi_parts: self.midi_parts.clone(),
             plan: self.plan.clone(),
             queue: self
                 .queue
@@ -90,6 +95,8 @@ impl Model {
         self.state.error = None;
     }
     pub(super) fn install(&mut self, mut prepared: Prepared) {
+        self.source = prepared.source;
+        self.midi_parts = prepared.midi_parts;
         if let Some(title) = self.renamed_tracks.get(&prepared.track.id) {
             prepared.track.title = title.clone();
         }
@@ -133,6 +140,25 @@ impl Model {
             .events
             .partition_point(|e| e.time < self.state.position);
         self.state.status = PlaybackStatus::Paused;
+    }
+    pub(super) fn replace_parts(
+        &mut self,
+        plan: PlaybackPlan,
+        selection: crate::music::types::MidiParts,
+        now: Instant,
+    ) {
+        let position = self.position(now);
+        self.plan = plan;
+        self.midi_parts = Some(selection);
+        self.state.position = position;
+        self.state.current_event_index = self
+            .plan
+            .events
+            .partition_point(|event| event.time < position);
+        self.state.generation += 1;
+        self.state.active_event_indices.clear();
+        self.base = position;
+        self.started = now;
     }
     pub(super) fn speed(&mut self, speed: f64, now: Instant) {
         self.state.position = self.position(now);

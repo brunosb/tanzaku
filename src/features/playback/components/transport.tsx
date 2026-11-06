@@ -222,7 +222,8 @@ export function Transport({ runtime }: { runtime: PlaybackContext }) {
                         className="transport-play"
                         size="icon"
                         disabled={
-                            !meta.plan.events.length ||
+                            !meta.track ||
+                            !state.duration ||
                             state.status === 'loading'
                         }
                         onClick={() =>
@@ -284,7 +285,7 @@ export function Transport({ runtime }: { runtime: PlaybackContext }) {
                         size="icon"
                         variant="ghost"
                         aria-pressed={state.repeatEnabled}
-                        disabled={!meta.plan.events.length}
+                        disabled={!meta.track || !state.duration}
                         className={state.repeatEnabled ? 'repeat-active' : ''}
                         onClick={() => run(runtime.api.playback.toggleRepeat())}
                     >

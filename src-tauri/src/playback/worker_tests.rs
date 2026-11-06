@@ -129,7 +129,10 @@ impl Harness {
             )
         });
         Self {
-            controller: PlaybackController { commands },
+            controller: PlaybackController {
+                commands,
+                selections: Arc::default(),
+            },
             output,
             device,
             join: Some(join),
@@ -172,7 +175,179 @@ fn prepared(id: &str, time: f64, hold: f64) -> Prepared {
             stats: Default::default(),
         },
         queue: None,
+        source: None,
+        midi_parts: None,
     }
+}
+fn midi_source() -> Arc<super::loader::MidiSource> {
+    Arc::new(super::loader::MidiSource {
+        document: crate::music::midi::read_document(&crate::music::midi::tests::fixture_bytes())
+            .unwrap(),
+        root: std::path::PathBuf::new(),
+    })
+}
+fn prepared_midi(id: &str, source: Arc<super::loader::MidiSource>) -> Prepared {
+    let parts = source.document.selection(None).unwrap();
+    Prepared {
+        track: Track {
+            id: id.into(),
+            title: id.into(),
+        },
+        plan: source.document.plan(&parts.selected_part_ids),
+        queue: None,
+        source: Some(source),
+        midi_parts: Some(parts),
+    }
+}
+fn apply_parts(id: &str, source: &Arc<super::loader::MidiSource>, ids: &[String]) -> Action {
+    Action::ApplyMidiParts {
+        track_id: id.into(),
+        source: source.clone(),
+        selection: source.document.selection(Some(ids)).unwrap(),
+        plan: source.document.plan(ids),
+    }
+}
+
+#[test]
+fn live_parts_keep_target_clock_speed_and_queue_and_allow_silent_auto_advance() {
+    let source = midi_source();
+    let loader_source = source.clone();
+    let h = Harness::new(Arc::new(move |spec| {
+        let id = match spec {
+            LoadSpec::Track(id) | LoadSpec::Context(id, _, _) => id,
+            _ => "a".into(),
+        };
+        let mut prepared = prepared_midi(&id, loader_source.clone());
+        if id == "a" {
+            prepared.queue = Some(test_queue(vec!["a".into(), "b".into()]));
+        }
+        Ok(prepared)
+    }));
+    h.controller
+        .request(Action::BackgroundPlayback(true))
+        .unwrap();
+    h.controller.request(Action::AutoAdvance(true)).unwrap();
+    h.controller
+        .request(Action::Load("a".into(), None))
+        .unwrap();
+    h.controller.request(Action::Play).unwrap();
+    h.wait(|n| matches!(n,Notice::State(s) if s.status==PlaybackStatus::Playing));
+    h.controller.request(Action::Speed(1.5)).unwrap();
+    h.controller.request(Action::Seek(0.99, true)).unwrap();
+    h.wait(|n| matches!(n, Notice::Event));
+    h.device.focused.store(false, Ordering::SeqCst);
+    let muted = h
+        .controller
+        .request(apply_parts("a", &source, &[]))
+        .unwrap();
+    assert_eq!(muted.state.status, PlaybackStatus::Playing);
+    assert!(muted.state.position >= 1.0 && muted.state.position < 1.5);
+    assert_eq!(muted.state.speed, 1.5);
+    assert_eq!(muted.state.countdown_remaining, 0);
+    assert_eq!(muted.queue.unwrap().index, 0);
+    assert!(muted.plan.events.is_empty());
+    assert!(muted.state.active_event_indices.is_empty());
+    assert_eq!(h.device.arms.load(Ordering::SeqCst), 1);
+    h.controller
+        .request(Action::Seek(source.document.duration - 0.02, true))
+        .unwrap();
+    h.wait(|n| matches!(n,Notice::Plan(s) if s.track.as_ref().is_some_and(|t|t.id=="b") && s.state.status==PlaybackStatus::Playing));
+    assert_eq!(h.device.arms.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn parts_apply_to_current_pause_stop_seek_and_countdown_without_resurrecting_playback() {
+    let source = midi_source();
+    let loader_source = source.clone();
+    let h = Harness::with_start(
+        Arc::new(move |_| Ok(prepared_midi("a", loader_source.clone()))),
+        |_| Ok(()),
+        Duration::from_secs(3),
+        crate::preferences::StartPolicy::Countdown,
+    );
+    h.controller
+        .request(Action::Load("a".into(), None))
+        .unwrap();
+    h.controller.request(Action::Play).unwrap();
+    let countdown = h
+        .controller
+        .request(apply_parts("a", &source, &[]))
+        .unwrap();
+    assert_eq!(countdown.state.status, PlaybackStatus::Countdown);
+    assert_eq!(countdown.state.countdown_remaining, 3);
+    h.controller.request(Action::Pause).unwrap();
+    h.controller.request(Action::Seek(0.7, false)).unwrap();
+    let paused = h
+        .controller
+        .request(apply_parts("a", &source, &["1:0".into()]))
+        .unwrap();
+    assert_eq!(paused.state.status, PlaybackStatus::Paused);
+    assert_eq!(paused.state.position, 0.7);
+    h.controller.request(Action::Stop).unwrap();
+    let stopped = h
+        .controller
+        .request(apply_parts("a", &source, &[]))
+        .unwrap();
+    assert_eq!(stopped.state.status, PlaybackStatus::Stopped);
+    assert_eq!(stopped.state.position, 0.0);
+    assert_eq!(h.device.arms.load(Ordering::SeqCst), 0);
+    h.controller
+        .request(Action::StartMode(
+            crate::preferences::StartPolicy::GameFocus,
+        ))
+        .unwrap();
+    let waiting = h.controller.request(Action::Play).unwrap();
+    assert_eq!(waiting.state.status, PlaybackStatus::WaitingForGame);
+}
+
+#[test]
+fn obsolete_parts_cannot_replace_a_new_song_or_a_reload_of_the_same_song() {
+    let source = midi_source();
+    let first_source = source.clone();
+    let calls = AtomicUsize::new(0);
+    let h = Harness::new(Arc::new(move |spec| {
+        let id = match spec {
+            LoadSpec::Track(id) | LoadSpec::Context(id, _, _) => id,
+            _ => "a".into(),
+        };
+        let source = if calls.fetch_add(1, Ordering::SeqCst) == 0 {
+            first_source.clone()
+        } else {
+            midi_source()
+        };
+        Ok(prepared_midi(&id, source))
+    }));
+    h.controller
+        .request(Action::Load("a".into(), None))
+        .unwrap();
+    h.controller
+        .request(Action::Load("b".into(), None))
+        .unwrap();
+    assert!(h
+        .controller
+        .request(apply_parts("a", &source, &[]))
+        .is_err());
+    let next = h.controller.request(Action::Snapshot).unwrap();
+    assert_eq!(next.track.unwrap().id, "b");
+    assert_eq!(next.state.status, PlaybackStatus::Idle);
+    assert!(next.state.error.is_none());
+    h.controller
+        .request(Action::Load("a".into(), None))
+        .unwrap();
+    assert!(h
+        .controller
+        .request(apply_parts("a", &source, &[]))
+        .is_err());
+    assert_eq!(
+        h.controller
+            .request(Action::Snapshot)
+            .unwrap()
+            .midi_parts
+            .unwrap()
+            .selected_part_ids
+            .len(),
+        3
+    );
 }
 fn test_queue(ids: Vec<String>) -> Queue {
     let current = ids[0].clone();

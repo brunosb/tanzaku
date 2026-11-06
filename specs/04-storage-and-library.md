@@ -6,6 +6,10 @@ Uma transação global serializa a leitura/modificação/gravação dos índices
 
 Importações validam o MIDI antes de adicionar o registro. Renomeação reverte o arquivo se a gravação do índice falhar. Exclusão valida biblioteca e playlists, move o MIDI para um nome temporário e atualiza ambos os índices; em falha, tenta restaurar índices e arquivo.
 
+O seletor local usa múltipla seleção em `library_import_many`, retornando `ImportReport` com `imported` e `failed` (nome do arquivo e erro). Cancelar retorna null. Cada importação confirmada permanece salva quando outro arquivo falha. Nomes duplicados seguem a numeração existente; originais não são alterados. `library_import` continua disponível para compatibilidade. A interface reconcilia o catálogo ao concluir e apresenta erros individuais, sem iniciar reprodução ou criar vínculos de playlist.
+
+`LibraryEntry.selectedPartIds` é opcional: ausência seleciona todas as partes; uma lista vazia silencia a música. IDs combinam índice da pista física e canal, ambos internos e zero-based, independentes do nome do arquivo. A seleção pertence à entrada da biblioteca, é preservada por renomeação e compartilhada pelas playlists que referenciam essa entrada. Arquivos importados separadamente mantêm escolhas independentes. Apenas a seleção é persistida; metadados são derivados do MIDI original ao carregar.
+
 Excluir uma faixa carregada ou trocar a raiz também descarrega o backend. A troca de raiz cancela a conversão ativa. Configurações do Rust são a autoridade da pasta escolhida; localStorage do WebView não substitui essa seleção.
 
 A página `/settings` reúne início da reprodução, atalhos globais e seleção da pasta única da biblioteca. `settings.json` mantém `startMode` (`game-focus` por padrão ou `countdown`) e `shortcuts`, um mapa de ações para combinação textual ou `null` quando desativada. Campos ausentes em instalações anteriores recebem padrões sem migração dos índices. Preferências são restauradas na inicialização e na troca de biblioteca.
