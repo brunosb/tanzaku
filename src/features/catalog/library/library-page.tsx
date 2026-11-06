@@ -61,7 +61,7 @@ export function LibraryPage({ runtime, open, importMidi }: CatalogProps) {
                     </Button>
                     <Button disabled={catalog.busy} onClick={importMidi}>
                         <Upload />
-                        Importar MIDI
+                        Importar MIDIs
                     </Button>
                 </div>
             </header>
@@ -168,7 +168,7 @@ export function LibraryPage({ runtime, open, importMidi }: CatalogProps) {
                         >
                             {catalog.entries.length
                                 ? 'Limpar filtros'
-                                : 'Importar MIDI'}
+                                : 'Importar MIDIs'}
                         </Button>
                     </Empty>
                 )

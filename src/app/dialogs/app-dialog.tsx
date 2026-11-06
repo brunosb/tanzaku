@@ -1,12 +1,15 @@
 import { CatalogDialog } from '@/features/catalog/components/catalog-dialog'
+import { ImportReportDialog } from '@/features/catalog/import/import-report-dialog'
 import { YoutubeDialog } from '@/features/catalog/import/youtube-dialog'
 import type { CatalogDialogAction } from '@/features/catalog/model/dialog-actions'
 import { StorageDialog } from '@/features/settings/storage-dialog'
+import type { ImportReport } from '@/shared/api/contracts'
 import type { Runtime } from '../runtime'
 export type DialogAction =
     | CatalogDialogAction
     | { kind: 'youtube' }
     | { kind: 'storage' }
+    | { kind: 'import-report'; report: ImportReport }
 export function AppDialog({
     action,
     close,
@@ -16,6 +19,8 @@ export function AppDialog({
     close: () => void
     runtime: Runtime
 }) {
+    if (action.kind === 'import-report')
+        return <ImportReportDialog report={action.report} close={close} />
     if (action.kind === 'youtube')
         return <YoutubeDialog runtime={runtime} close={close} />
     if (action.kind === 'storage')

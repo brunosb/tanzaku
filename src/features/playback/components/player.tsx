@@ -10,6 +10,7 @@ import {
 import { formatTime } from '@/shared/lib/format-time'
 import { AppLogo } from '@/shared/ui/app-logo'
 import { Button } from '@/shared/ui/button'
+import { MidiPartsPanel } from './midi-parts-panel'
 export function Player({
     runtime,
     importMidi,
@@ -22,6 +23,10 @@ export function Player({
         runtime.playback.meta,
     )
     const root = useRef<HTMLDivElement>(null)
+    const loading = useSyncExternalStore(
+        runtime.playback.subscribe,
+        () => runtime.playback.get().status === 'loading',
+    )
     useEffect(() => mountPiano(root.current!, runtime), [runtime])
     return (
         <>
@@ -33,9 +38,21 @@ export function Player({
                     </h1>
                     <QueueSummary queue={meta.queue} />
                 </div>
-                <Status runtime={runtime} />
+                <div className="player-heading-controls">
+                    {meta.track && meta.midiParts && (
+                        <MidiPartsPanel
+                            key={meta.track.id}
+                            runtime={runtime}
+                            trackId={meta.track.id}
+                            title={meta.track.title}
+                            parts={meta.midiParts}
+                            disabled={loading}
+                        />
+                    )}
+                    <Status runtime={runtime} />
+                </div>
             </header>
-            {!meta.plan.events.length && (
+            {!meta.track && (
                 <div className="player-empty">
                     <AppLogo className="player-logo" />
                     <p>Escolha uma música para visualizar suas notas.</p>
@@ -46,10 +63,17 @@ export function Player({
                         </Button>
                         <Button variant="outline" onClick={importMidi}>
                             <Upload />
-                            Importar MIDI
+                            Importar MIDIs
                         </Button>
                     </div>
                 </div>
+            )}
+            {meta.track && !meta.plan.events.length && (
+                <p className="midi-silence-notice" role="status">
+                    {meta.midiParts?.selectedPartIds.length === 0
+                        ? 'Nenhuma parte ativa. A música pode continuar em silêncio; selecione partes para enviar notas.'
+                        : 'As partes selecionadas não têm notas no alcance do jogo.'}
+                </p>
             )}
             <section
                 className={`roll-card ${!meta.plan.events.length ? 'empty-roll' : ''}`}
@@ -60,7 +84,9 @@ export function Player({
                         <small id="plan-summary">
                             {meta.plan.events.length
                                 ? `${meta.plan.events.length} eventos · ${formatTime(meta.plan.duration)}`
-                                : 'Selecione um MIDI para visualizar'}
+                                : meta.track
+                                  ? `0 eventos · ${formatTime(meta.plan.duration)}`
+                                  : 'Selecione um MIDI para visualizar'}
                         </small>
                     </div>
                     <div className="legend">

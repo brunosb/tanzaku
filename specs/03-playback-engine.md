@@ -2,6 +2,14 @@
 
 O plano usa `max(time + hold)` como duração. O relógio musical escala ataques e liberações pela velocidade; alterar velocidade recalcula os prazos restantes pela mesma posição musical. Notas inteiramente vencidas não são pressionadas atrasadas.
 
+Para arquivos MIDI, a duração fixa vem de todas as notas do documento, antes de filtrar as partes e o alcance. Uma margem de até 25 ms acomoda os ataques de acordes planejados. Todos os subconjuntos usam a mesma duração; um plano sem eventos continua sendo uma música carregada, podendo reproduzir em silêncio e avançar/repetir normalmente.
+
+A leitura conserva a identidade pista/canal de cada nota e usa um mapa global de andamento. Pares NoteOn/NoteOff priorizam a própria pista para não misturar durações quando há canais e alturas compartilhados; releases em outra pista são atribuídos ao ataque original. Partes sem notas são omitidas da seleção, sem descartar seu andamento. Nomes usam metadados de pista, instrumento ou texto, complementados por programas General MIDI e canal. Formatos 0/1 são suportados; formato 2 e timecode retornam erros explícitos.
+
+`playback_set_midi_parts(trackId, partIds)` serializa preparação e gravação fora do worker musical, usando o documento imutável em cache. Somente depois de salvar a escolha o controlador envia o novo plano ao worker. A identidade do documento e da música impede aplicar resultados antigos a uma troca ou recarga. A aplicação libera notas ativas e preserva posição, velocidade, fila, status, espera e janela capturada no momento da troca; somente ataques futuros são despachados. Pausar, Parar e buscar durante a preparação não são desfeitos pela resposta.
+
+Snapshot contém `midiParts` com partes e IDs selecionados. O bridge expõe `playback.onMidiParts` em assinatura de metadados, sem anexá-los aos eventos periódicos de posição. Alterar partes aumenta a geração do plano, atualizando piano roll, forma de onda e estatísticas; a escolha não muda a duração completa. Falhas de gravação preservam a seleção confirmada e o plano em execução.
+
 Reprodução manual inicia no estado `waiting-for-game` por padrão. Após um comando de reprodução, o worker aguarda uma janela focada de `wwm.exe` e captura seu PID, janela principal e janelas filhas. QueryFullProcessImageNameW identifica o executável; a enumeração Toolhelp permite reconhecer processos elevados sem ler sua memória. Outros aplicativos nunca são destinos válidos. A alternativa configurável inicia uma contagem nativa de três segundos e valida o jogo ao terminar. Pausar e Parar cancelam ambos os tipos de espera. Alterar `startMode` afeta o próximo início, sem modificar uma espera já iniciada.
 
 Com segundo plano ativo, perda de foco não interrompe a reprodução. Fechar ou minimizar o alvo pausa e libera teclas. Com segundo plano desativado, a perda de foco também pausa, inclusive em silêncios.

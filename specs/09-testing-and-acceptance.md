@@ -4,6 +4,10 @@ Executar `npm test`, cargo fmt --check, cargo clippy --all-targets -- -D warning
 
 Rust cobre mapa, seleção de acordes, duração total, relógio/velocidade, teclado/modificadores, cancelamento de carregamento, playlist, foco e encerramento. O worker é exercitado com dispositivo e publicação injetáveis, sem enviar teclas ao computador nos testes.
 
+Partes MIDI possuem fixtures sintéticas para pistas paralelas, vários canais na mesma pista, canais/alturas compartilhados, nomes em texto, fallback de instrumento, percussão e mapa de andamento separado. Regressões cobrem duração estável, seleção vazia, atualização durante playback, preservação de pausa/parada/busca/contagem, troca de alvo e descarte de resultados antigos. Persistência e importação múltipla cobrem nomes duplicados, arquivos inválidos, origem inalterada e falha de gravação.
+
+O smoke `smoke-midi-parts.cjs` usa IPC real e biblioteca temporária para conferir seleção, silêncio, persistência entre renomeação/playlist/troca de armazenamento, falha de gravação e painel lateral. Opcionalmente, `TANZAKU_SMOKE_MIDI_LIBRARY` aponta uma biblioteca com a playlist Filmes: seus MIDIs são copiados para o armazenamento temporário e exercitados pelo parser nativo, verificando hashes dos originais e índices ao final. Os arquivos baixados não são incluídos no repositório e o smoke não inicia envio de teclas ao jogo.
+
 A transcrição possui fixtures controladas do Basic Pitch 0.4.0, verificação de ticks MIDI, bends extremos, silêncio, cancelamento e um WAV musical gerado executado pelo ONNX real. O teste opcional de WAV externo é explicitamente ignored; só executar com TANZAKU_TEST_WAV configurada.
 
 JavaScript cobre argumentos IPC, inicialização/listeners, gerações e sequências, fila exclusivamente nativa, cancelamento por jobId, destaques simultâneos e interpolação do cursor.

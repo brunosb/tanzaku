@@ -2,6 +2,7 @@ import {
     type DispatchTiming,
     initialState,
     type LibraryEntry,
+    type MidiParts,
     type PlaybackEvent,
     type PlaybackPlan,
     type PlaybackQueue,
@@ -20,6 +21,8 @@ export function createBridge(tauri: TauriGlobal): TanzakuApi {
     let plan: PlaybackPlan = { events: [], duration: 0 }
     let track: Track | null = null
     let queue: PlaybackQueue | null = null
+    let midiParts: MidiParts | null = null
+    let partsSerial: Promise<unknown> = Promise.resolve()
     let planGeneration = -1
     let refreshing: Promise<void> | undefined
     let youtube: { id: string; canceled: boolean } | undefined
@@ -27,6 +30,7 @@ export function createBridge(tauri: TauriGlobal): TanzakuApi {
     const plans = new Set<(v: PlaybackPlan) => void>()
     const tracks = new Set<(v: Track | null) => void>()
     const queues = new Set<(v: PlaybackQueue | null) => void>()
+    const parts = new Set<(v: MidiParts | null) => void>()
     const countdowns = new Set<(v: { remaining: number }) => void>()
     const events = new Set<
         (v: PlaybackEvent, i: number, timing: DispatchTiming) => void
@@ -57,12 +61,17 @@ export function createBridge(tauri: TauriGlobal): TanzakuApi {
             track?.id !== next.track?.id || track?.title !== next.track?.title
         const nextQueue = next.queue ?? null
         const queueChanged = JSON.stringify(queue) !== JSON.stringify(nextQueue)
+        const nextParts = next.midiParts ?? null
+        const partsChanged =
+            JSON.stringify(midiParts) !== JSON.stringify(nextParts)
+        midiParts = nextParts
         queue = nextQueue
         track = next.track
         state = next.state
         if (trackChanged || changed) for (const fn of tracks) fn(track)
         if (changed) for (const fn of plans) fn(plan)
         if (queueChanged) for (const fn of queues) fn(queue)
+        if (partsChanged) for (const fn of parts) fn(midiParts)
         emitState()
     }
     const refresh = (): Promise<void> => {
@@ -169,6 +178,7 @@ export function createBridge(tauri: TauriGlobal): TanzakuApi {
                 return result
             },
             import: () => invoke('library_import'),
+            importMany: () => invoke('library_import_many'),
             addYoutube: async (url) => {
                 if (youtube)
                     throw new Error('Já existe uma conversão em andamento.')
@@ -193,6 +203,20 @@ export function createBridge(tauri: TauriGlobal): TanzakuApi {
             },
         },
         playback: {
+            setMidiParts: (trackId, partIds) => {
+                const selection = [...partIds]
+                const task = partsSerial
+                    .then(() =>
+                        invoke<Snapshot>('playback_set_midi_parts', {
+                            trackId,
+                            partIds: selection,
+                        }),
+                    )
+                    .then(acceptSnapshot)
+                partsSerial = task.catch(() => {})
+                return task
+            },
+            onMidiParts: subscription(parts, () => midiParts),
             setBackgroundPlayback: (enabled) =>
                 invoke('playback_set_background', { enabled }),
             load,

@@ -1,3 +1,4 @@
+mod instruments;
 pub(crate) mod midi;
 pub(crate) mod planner;
 

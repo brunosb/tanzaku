@@ -14,7 +14,8 @@ Abra o jogo no modo Música Livre. Se o jogo exigir administrador, execute o Tan
 
 ## Funcionalidades
 
-- Importação de MIDI e conversão de uma URL individual do YouTube.
+- Importação de vários MIDIs locais de uma vez e conversão de uma URL individual do YouTube.
+- Seleção de partes MIDI por música, com atualização durante a reprodução e escolhas salvas.
 - Busca sem distinção de acentos ou maiúsculas, filtros de origem e participação em playlists.
 - Playlists com adição em lote e edição da ordem das músicas.
 - Paginação de 20 itens, com seleção preservada entre páginas.
@@ -35,7 +36,7 @@ Abra o jogo no modo Música Livre. Se o jogo exigir administrador, execute o Tan
 
 1. Baixe `Tanzaku_<versão>_x64-setup.exe` na [última release](https://github.com/brunosb/tanzaku/releases/latest).
 2. Execute o instalador no Windows 10/11 x64. Se o WebView2 ainda não estiver instalado, será necessário acesso à internet para instalá-lo.
-3. Inicie o Tanzaku e importe um MIDI pela biblioteca.
+3. Inicie o Tanzaku e use **Importar MIDIs** na biblioteca. Selecione um ou vários arquivos com Ctrl/Shift; arquivos válidos são adicionados mesmo se algum outro falhar, com um relatório dos erros.
 4. Abra a música, clique em Reproduzir e foque o jogo. O Tanzaku reconhece `wwm.exe` e começa imediatamente. Nas Configurações, você também pode escolher uma contagem de três segundos.
 
 O instalador inclui yt-dlp standalone, QuickJS-NG, FFmpeg de áudio, Basic Pitch ONNX e ONNX Runtime com suas DLLs locais do Visual C++. Não é necessário instalar Node.js, Rust, Python, uv ou FFmpeg. A conversão do YouTube requer internet; o yt-dlp pode receber atualizações oficiais verificadas automaticamente, sem substituir a versão incluída no aplicativo.
@@ -59,6 +60,7 @@ Get-FileHash .\Tanzaku_1.0.0_x64-setup.exe -Algorithm SHA256
 | Repetir | Repete a faixa atual com avanço desligado, ou a fila com avanço ligado |
 | Aleatório | Percorre as faixas sem repetir na rodada e preserva o histórico |
 | Forma de onda | Permite buscar por clique, arraste ou teclado |
+| Partes do MIDI | Escolhe as partes que serão enviadas ao jogo, com Todas, Nenhuma e Somente esta |
 
 O modo em segundo plano fica ativo por padrão e captura apenas uma janela de `wwm.exe`, continuando mesmo quando você alterna para outros programas. Buscar trechos, abrir outra música, iniciar uma playlist e trocar de faixa durante a reprodução preservam o destino e dispensam outra contagem. Ao arrastar a posição, a música continua até confirmar o novo trecho. Pausar preserva a sessão; Parar encerra o envio e zera a posição. Fechar ou minimizar o jogo pausa a faixa e libera as teclas. Desative o segundo plano para pausar quando o jogo perder o foco.
 
@@ -69,6 +71,12 @@ Configurações também mostra a pasta dos MIDIs, playlists e preferências. Esc
 A fila da biblioteca usa todo o resultado filtrado e ordenado, incluindo outras páginas. Na playlist, usa a ordem salva completa. Edições posteriores valem para a próxima abertura. A fila e o modo aleatório duram a sessão.
 
 O mapa musical trabalha com as alturas MIDI 48–83, usando teclas naturais, SHIFT e CTRL. Notas fora da faixa e limitações de acordes são contabilizadas no plano. A transcrição automática pode precisar de revisão musical.
+
+No Tocador, **Partes do MIDI** mostra as partes por pista e canal, com nome, instrumento informado, entrada e quantidade de notas no alcance do jogo. Isso também separa canais em arquivos que possuem uma única pista física. Pistas apenas de créditos ou andamento não aparecem como opções, e o andamento continua sendo respeitado.
+
+Todas as partes começam selecionadas, incluindo percussão. As escolhas ficam salvas por música, inclusive ao renomear, reabrir ou tocar em outra playlist. Alterar a seleção preserva posição, velocidade e sessão do jogo; as notas em curso são liberadas e a nova seleção vale para os próximos ataques. A linha do tempo completa é mantida, inclusive silêncios. Com nenhuma parte ativa, o relógio continua em silêncio e respeita repetição e avanço automático. Todas as partes usam o instrumento ativo no jogo; não há transposição automática ou reprodução de timbres separados.
+
+MIDIs de formatos 0 e 1 são aceitos. Formato 2, com sequências independentes, e timecode recebem uma mensagem de incompatibilidade. Importar não modifica o arquivo de origem, não inicia a reprodução e não adiciona automaticamente as músicas a uma playlist.
 
 ## Desenvolver
 

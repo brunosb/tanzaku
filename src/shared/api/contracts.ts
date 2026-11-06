@@ -9,6 +9,18 @@ export type PlaybackPlan = {
     events: PlaybackEvent[]
     stats?: Record<string, number>
 }
+export type MidiPart = {
+    id: string
+    trackIndex: number
+    channel: number
+    name: string
+    instrument: string | null
+    percussion: boolean
+    noteCount: number
+    playableNoteCount: number
+    startTime: number
+}
+export type MidiParts = { parts: MidiPart[]; selectedPartIds: string[] }
 export type PlaybackState = {
     status:
         | 'idle'
@@ -45,6 +57,11 @@ export type LibraryEntry = Track & {
     sourceUrl?: string | null
     duration?: number | null
     addedAt?: string | null
+    selectedPartIds?: string[] | null
+}
+export type ImportReport = {
+    imported: LibraryEntry[]
+    failed: { fileName: string; error: string }[]
 }
 export type Playlist = {
     id: string
@@ -69,6 +86,7 @@ export type Snapshot = {
     track: Track | null
     plan: PlaybackPlan
     queue: PlaybackQueue | null
+    midiParts?: MidiParts | null
 }
 export type YoutubeProgress = {
     jobId: string
@@ -115,6 +133,7 @@ export type TanzakuApi = {
         rename(id: string, title: string): Promise<LibraryEntry>
         remove(id: string): Promise<LibraryEntry[]>
         import(): Promise<LibraryEntry | null>
+        importMany(): Promise<ImportReport | null>
         addYoutube(url: string): Promise<LibraryEntry>
         cancelYoutube(): Promise<void>
     }
@@ -130,6 +149,8 @@ export type TanzakuApi = {
         stop(): Promise<void>
         seek(position: number, resume?: boolean): Promise<void>
         setSpeed(speed: number): Promise<void>
+        setMidiParts(trackId: string, partIds: string[]): Promise<void>
+        onMidiParts: Subscription<MidiParts | null>
         toggleRepeat(): Promise<boolean>
         onState: Subscription<PlaybackState>
         onPlan: Subscription<PlaybackPlan>

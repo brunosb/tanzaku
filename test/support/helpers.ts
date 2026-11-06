@@ -1,7 +1,10 @@
 import { createRuntime } from '../../src/app/runtime'
 import {
+    type ImportReport,
     initialState,
     type LibraryEntry,
+    type MidiParts,
+    type PlaybackEvent,
     type PlaybackQueue,
     type PlaybackSource,
     type Playlist,
@@ -12,6 +15,35 @@ import { defaultShortcuts } from '../../src/shared/api/settings-defaults'
 import { createBridge } from '../../src/shared/api/tauri-bridge'
 
 export function harness(size = 65) {
+    let importReport: ImportReport | null = null
+    let sourceEvents: PlaybackEvent[] = []
+    const midiParts: MidiParts = {
+        parts: [
+            {
+                id: '0:0',
+                trackIndex: 1,
+                channel: 1,
+                name: 'Piano',
+                instrument: 'Acoustic Grand Piano',
+                percussion: false,
+                noteCount: 1,
+                playableNoteCount: 1,
+                startTime: 0,
+            },
+            {
+                id: '1:1',
+                trackIndex: 2,
+                channel: 2,
+                name: 'Flauta',
+                instrument: 'Flute',
+                percussion: false,
+                noteCount: 1,
+                playableNoteCount: 1,
+                startTime: 0.005,
+            },
+        ],
+        selectedPartIds: ['0:0', '1:1'],
+    }
     let settings = {
         storageRoot: 'C:/isolated',
         startMode: 'game-focus',
@@ -75,6 +107,41 @@ export function harness(size = 65) {
                 const id = String(args.id ?? args.playlistId ?? '')
                 const p = playlists.find((p) => p.id === id)
                 switch (command) {
+                    case 'library_import_many':
+                        if (importReport)
+                            entries.push(
+                                ...structuredClone(importReport.imported),
+                            )
+                        return structuredClone(importReport)
+                    case 'playback_set_midi_parts': {
+                        if (snapshot.track?.id !== args.trackId)
+                            throw new Error('A música foi alterada')
+                        const selectedPartIds = args.partIds as string[]
+                        const entry = entries.find(
+                            (entry) => entry.id === args.trackId,
+                        )!
+                        entry.selectedPartIds = [...selectedPartIds]
+                        snapshot.midiParts = {
+                            ...midiParts,
+                            selectedPartIds: [...selectedPartIds],
+                        }
+                        snapshot.plan = {
+                            ...snapshot.plan,
+                            events: sourceEvents.filter((_, index) =>
+                                selectedPartIds.includes(
+                                    midiParts.parts[index].id,
+                                ),
+                            ),
+                        }
+                        snapshot.state = {
+                            ...snapshot.state,
+                            activeEventIndices: [],
+                            generation: snapshot.state.generation + 1,
+                            sequence: snapshot.state.sequence + 1,
+                        }
+                        emit('playback-plan', structuredClone(snapshot))
+                        return structuredClone(snapshot)
+                    }
                     case 'playback_set_background':
                         snapshot.state.backgroundPlaybackEnabled = Boolean(
                             args.enabled,
@@ -137,6 +204,12 @@ export function harness(size = 65) {
                                 : null
                         }
                         snapshot = {
+                            midiParts: {
+                                ...midiParts,
+                                selectedPartIds:
+                                    e.selectedPartIds ??
+                                    midiParts.selectedPartIds,
+                            },
                             queue: {
                                 source: playlist ? 'playlist' : 'library',
                                 playlist: playlist
@@ -183,6 +256,12 @@ export function harness(size = 65) {
                                 ],
                             },
                         }
+                        sourceEvents = snapshot.plan.events
+                        snapshot.plan.events = sourceEvents.filter((_, index) =>
+                            snapshot.midiParts!.selectedPartIds.includes(
+                                midiParts.parts[index].id,
+                            ),
+                        )
                         emit('playback-plan', structuredClone(snapshot))
                         return snapshot.plan
                     }
@@ -299,6 +378,9 @@ export function harness(size = 65) {
         },
         setPlaylists: (next: Playlist[]) => {
             playlists = next
+        },
+        setImportReport: (report: ImportReport | null) => {
+            importReport = report
         },
     }
 }

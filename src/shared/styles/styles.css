@@ -143,6 +143,101 @@ button:disabled {
     display: grid;
     gap: 18px;
 }
+.player-heading-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+.midi-parts-panel {
+    width: min(100%, 480px);
+    max-width: 480px;
+    gap: 12px;
+}
+.midi-parts-panel [data-slot="sheet-description"] {
+    overflow-wrap: anywhere;
+}
+.parts-count {
+    font-size: 11px;
+    opacity: 0.7;
+}
+.parts-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 0 16px;
+}
+.parts-actions > span {
+    margin-left: auto;
+    color: var(--muted-foreground);
+    font-size: 12px;
+}
+.midi-parts-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 16px;
+}
+.midi-part {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+}
+.midi-part label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+}
+.midi-part p {
+    margin: 7px 0 0 26px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--muted-foreground);
+}
+.midi-part-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 6px 0 0 26px;
+    gap: 8px;
+    font-size: 11px;
+}
+.midi-part-actions button {
+    margin-left: auto;
+}
+.parts-unplayable {
+    color: var(--primary);
+}
+.parts-footnote,
+.parts-error {
+    margin: 0;
+    padding: 0 16px 16px;
+    font-size: 12px;
+    line-height: 1.6;
+}
+.parts-footnote {
+    color: var(--muted-foreground);
+}
+.midi-silence-notice {
+    font-size: 13px;
+    color: var(--muted-foreground);
+    margin: 0 0 14px;
+}
+.import-failures {
+    max-height: 45vh;
+    overflow-y: auto;
+    font-size: 13px;
+}
+.import-failures li + li {
+    margin-top: 14px;
+}
+.import-failures p {
+    margin: 4px 0 0;
+    overflow-wrap: anywhere;
+    color: var(--muted-foreground);
+}
 .settings-card {
     padding: 22px;
     border: 1px solid var(--border);
