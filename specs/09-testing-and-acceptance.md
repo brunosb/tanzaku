@@ -10,6 +10,10 @@ JavaScript cobre argumentos IPC, inicialização/listeners, gerações e sequên
 
 Regressões cobrem avanço desligado/ligado em biblioteca e playlist, ordens sequencial/aleatória, repetição da faixa/fila e cancelamento de transição pendente. Persistência preserva outros campos e JSON inválido; falhas de gravação não alteram a indicação do botão. O smoke confirma a preferência no disco e sua restauração na troca de armazenamento.
 
+Reprodução cobre início condicionado ao comando e foco no jogo, cancelamento da espera, contagem de três segundos, rejeição do alvo incorreto e continuidade em segundo plano ao buscar, navegar, abrir músicas/playlists e retomar. Atalhos cobrem ações do controlador, repetição de pressionamento, combinações duplicadas e conflitos musicais. A interface testa Configurações, falhas ao salvar, restauração de padrões, busca sem pausa em segundo plano e versão nativa no Sobre.
+
+O smoke de configurações registra atalhos nativos sem pressioná-los, usa um processo temporário para ocupar uma combinação e conferir a rejeição pelo Windows, e simula falha de gravação com um arquivo temporário somente leitura. Preferências e arquivos anteriores devem permanecer intactos. Também verifica restauração ao trocar de biblioteca e captura as novas telas. Todos os dados são isolados; a biblioteca e os atalhos pessoais do usuário são preservados.
+
 Paginação usa 20 itens, com cenários de 0, 1, 20, 21 e 41 resultados, busca após mudar de página, seleção entre páginas e redução da última página. O smoke exige todas as 21 linhas visíveis em 900×920.
 
 O CI executa testes e build NSIS; `npm run test:installer` instala dentro de target e verifica recursos empacotados no WebView2, com dados isolados e sem ferramentas globais no PATH. Release só é publicada após essa validação e recebe SHA256SUMS.txt. `npm run check:version` exige versões sincronizadas nos manifestos e lockfiles.

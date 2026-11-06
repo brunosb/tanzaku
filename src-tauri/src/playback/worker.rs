@@ -29,6 +29,24 @@ fn release<D: Device>(m: &mut Model, k: &mut Keyboard<D>, disarm: bool) -> Resul
     }
     result
 }
+fn begin_or_wait<D: Device>(
+    m: &mut Model,
+    k: &Keyboard<D>,
+    policy: crate::preferences::StartPolicy,
+    countdown: Duration,
+) {
+    m.state.error = None;
+    m.state.pause_reason = None;
+    if m.state.background_playback_enabled && k.device.available() {
+        m.begin(Instant::now());
+    } else if policy == crate::preferences::StartPolicy::GameFocus {
+        m.state.status = PlaybackStatus::WaitingForGame;
+    } else {
+        m.countdown = Some(Instant::now() + countdown);
+        m.state.countdown_remaining = countdown.as_secs_f64().ceil() as u32;
+        m.state.status = PlaybackStatus::Countdown;
+    }
+}
 pub(super) fn run_worker(
     app: impl Publisher,
     receiver: mpsc::Receiver<Command>,
@@ -48,7 +66,7 @@ pub(super) fn run_worker(
     }
     k.device.set_background(m.state.background_playback_enabled);
     let mut waiter = PreciseWaiter::new();
-    let mut previous_keys = (false, false);
+    let mut start_mode = config.start_mode;
     loop {
         // Bound command processing so a flooded IPC queue cannot starve key-up.
         for _ in 0..64 {
@@ -76,9 +94,7 @@ pub(super) fn run_worker(
                         release(&mut m, &mut k, start != StartMode::Continue)?;
                         m.install(p);
                         if start == StartMode::Countdown {
-                            m.countdown = Some(Instant::now() + config.countdown);
-                            m.state.status = PlaybackStatus::Countdown;
-                            m.state.countdown_remaining = 5;
+                            begin_or_wait(&mut m, &k, start_mode, config.countdown);
                         }
                         if start == StartMode::Continue {
                             if !k.device.available() {
@@ -106,13 +122,29 @@ pub(super) fn run_worker(
                     }
                 }
                 Command::Request(action, reply) => {
+                    let action = match action {
+                        Action::SeekRelative(delta) => Action::Seek(
+                            m.position(Instant::now()) + delta,
+                            m.state.status == PlaybackStatus::Playing,
+                        ),
+                        action => action,
+                    };
+                    let keep_target = m.state.background_playback_enabled && k.device.available();
+                    let active = matches!(
+                        m.state.status,
+                        PlaybackStatus::Playing
+                            | PlaybackStatus::Countdown
+                            | PlaybackStatus::WaitingForGame
+                    );
                     if matches!(
                         action,
                         Action::BackgroundPlayback(_) | Action::RestoreBackground(_)
                     ) && (m.pending
                         || matches!(
                             m.state.status,
-                            PlaybackStatus::Playing | PlaybackStatus::Countdown
+                            PlaybackStatus::Playing
+                                | PlaybackStatus::Countdown
+                                | PlaybackStatus::WaitingForGame
                         ))
                     {
                         let _ =
@@ -134,12 +166,20 @@ pub(super) fn run_worker(
                                     .unwrap_or(QueueInput::Library { track_ids: vec![] }),
                                 m.shuffle_enabled,
                             ),
-                            StartMode::Loaded,
+                            if active && keep_target {
+                                StartMode::Continue
+                            } else {
+                                StartMode::Loaded
+                            },
                             None,
                         )),
                         Action::Playlist(id, random) => Some((
                             LoadSpec::Playlist(id.clone(), *random),
-                            StartMode::Countdown,
+                            if keep_target {
+                                StartMode::Continue
+                            } else {
+                                StartMode::Countdown
+                            },
                             None,
                         )),
                         Action::Previous | Action::Next => {
@@ -158,12 +198,16 @@ pub(super) fn run_worker(
                             };
                             let resume = matches!(
                                 m.state.status,
-                                PlaybackStatus::Playing | PlaybackStatus::Countdown
+                                PlaybackStatus::Playing
+                                    | PlaybackStatus::Countdown
+                                    | PlaybackStatus::WaitingForGame
                             ) || (m.state.status == PlaybackStatus::Paused
                                 && m.state.pause_reason.as_deref() == Some("focus-lost"));
                             Some((
                                 LoadSpec::Track(queue.current().to_string()),
-                                if resume {
+                                if resume && keep_target {
+                                    StartMode::Continue
+                                } else if resume {
                                     StartMode::Countdown
                                 } else {
                                     StartMode::Loaded
@@ -176,7 +220,7 @@ pub(super) fn run_worker(
                     if let Some((spec, start, queue)) = request {
                         m.state.position = m.position(Instant::now());
                         m.cancel();
-                        let result = release(&mut m, &mut k, true);
+                        let result = release(&mut m, &mut k, start != StartMode::Continue);
                         if let Err(e) = result {
                             let _ = reply.send(Err(e));
                             continue;
@@ -204,7 +248,9 @@ pub(super) fn run_worker(
                                 if m.pending
                                     || matches!(
                                         m.state.status,
-                                        PlaybackStatus::Playing | PlaybackStatus::Countdown
+                                        PlaybackStatus::Playing
+                                            | PlaybackStatus::Countdown
+                                            | PlaybackStatus::WaitingForGame
                                     )
                                 {
                                     return Err(
@@ -228,7 +274,9 @@ pub(super) fn run_worker(
                                 }
                                 if matches!(
                                     m.state.status,
-                                    PlaybackStatus::Playing | PlaybackStatus::Countdown
+                                    PlaybackStatus::Playing
+                                        | PlaybackStatus::Countdown
+                                        | PlaybackStatus::WaitingForGame
                                 ) {
                                     return Ok(());
                                 }
@@ -240,14 +288,11 @@ pub(super) fn run_worker(
                                     m.state.current_event_index = 0;
                                 }
                                 m.cancel();
-                                m.countdown = Some(Instant::now() + config.countdown);
-                                m.state.countdown_remaining = 5;
-                                m.state.status = PlaybackStatus::Countdown;
-                                m.state.error = None;
+                                begin_or_wait(&mut m, &k, start_mode, config.countdown);
                             }
                             Action::Pause => {
                                 m.pause(Instant::now(), None);
-                                release(&mut m, &mut k, true)?;
+                                release(&mut m, &mut k, !keep_target)?;
                             }
                             Action::Stop => {
                                 m.cancel();
@@ -258,13 +303,13 @@ pub(super) fn run_worker(
                             }
                             Action::Seek(p, resume) => {
                                 m.seek(p);
-                                release(&mut m, &mut k, true)?;
+                                release(&mut m, &mut k, !keep_target)?;
                                 if resume {
-                                    m.countdown = Some(Instant::now() + config.countdown);
-                                    m.state.countdown_remaining = 5;
-                                    m.state.status = PlaybackStatus::Countdown;
+                                    begin_or_wait(&mut m, &k, start_mode, config.countdown);
                                 }
                             }
+                            Action::StartMode(policy) => start_mode = policy,
+                            Action::SeekRelative(_) => unreachable!(),
                             Action::Speed(s) => {
                                 m.speed(s, Instant::now());
                                 k.expire(m.state.position)?;
@@ -373,20 +418,16 @@ pub(super) fn run_worker(
             }
         }
         let now = Instant::now();
-        let keys = k.device.shortcuts();
-        if keys.1 && !previous_keys.1 {
-            m.cancel();
-            m.state.position = 0.0;
-            m.state.current_event_index = 0;
-            m.state.status = PlaybackStatus::Stopped;
-            let _ = release(&mut m, &mut k, true);
-            publish(&app, &mut m, &k, false);
-        } else if keys.0 && !previous_keys.0 {
-            m.pause(now, None);
-            let _ = release(&mut m, &mut k, true);
+        if m.state.status == PlaybackStatus::WaitingForGame && k.device.game_focused() {
+            match k.device.arm() {
+                Ok(()) => m.begin(now),
+                Err(error) => {
+                    m.pause(now, Some("target-unavailable".to_string()));
+                    m.state.error = Some(error);
+                }
+            }
             publish(&app, &mut m, &k, false);
         }
-        previous_keys = keys;
         if let Some(deadline) = m.countdown {
             if now >= deadline {
                 m.countdown = None;

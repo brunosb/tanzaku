@@ -18,6 +18,23 @@ const previousUserSettings = fs.existsSync(userSettings)
 const artifacts = path.join(root, 'src-tauri', 'target', 'smoke')
 fs.mkdirSync(path.join(data, 'midi'))
 fs.mkdirSync(artifacts, { recursive: true })
+// Do not reserve the user's playback shortcuts during isolated desktop checks.
+fs.writeFileSync(
+    path.join(data, 'settings.json'),
+    JSON.stringify({
+        shortcuts: Object.fromEntries(
+            [
+                'pause',
+                'stop',
+                'play',
+                'previous',
+                'next',
+                'seekBackward',
+                'seekForward',
+            ].map((action) => [action, null]),
+        ),
+    }),
+)
 function fixtureMidi() {
     const events = []
     for (const [start, keys] of [
@@ -337,6 +354,12 @@ async function main() {
             data,
             artifacts,
         })
+        const settings = await require('./smoke-settings.cjs')({
+            evaluate,
+            send,
+            data,
+            artifacts,
+        })
         await evaluate(
             'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
         )
@@ -475,6 +498,7 @@ async function main() {
             checks: 'real WebView2 + Tauri IPC + ONNX passed',
             presentation,
             navigation,
+            settings,
             queue,
             youtube: youtubeResult,
             events: plan.events.length,

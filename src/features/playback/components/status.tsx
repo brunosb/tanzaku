@@ -4,6 +4,7 @@ import { Badge } from '@/shared/ui/badge'
 export function statusLabel(runtime: PlaybackContext) {
     const s = runtime.playback.get()
     if (s.error) return s.error
+    if (s.status === 'waiting-for-game') return 'Aguardando foco no jogo'
     if (s.status === 'countdown') return `Começa em ${s.countdownRemaining}s`
     if (s.pauseReason === 'focus-lost' && s.status === 'paused')
         return 'Pausado: o jogo perdeu o foco'

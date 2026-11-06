@@ -8,6 +8,9 @@ pub struct Stroke {
 }
 pub trait Device: Send {
     fn arm(&mut self) -> Result<(), String>;
+    fn game_focused(&self) -> bool {
+        false
+    }
     fn focused(&self) -> bool;
     fn available(&self) -> bool {
         self.focused()
@@ -18,9 +21,6 @@ pub trait Device: Send {
     }
     fn send(&mut self, events: &[Stroke]) -> Result<(), String>;
     fn disarm(&mut self);
-    fn shortcuts(&self) -> (bool, bool) {
-        (false, false)
-    }
 }
 struct Held {
     index: usize,
@@ -111,13 +111,13 @@ impl<D: Device> Keyboard<D> {
             .chain([0x2a, 0x1d])
             .map(|scan| Stroke { scan, up: true })
             .collect::<Vec<_>>();
-        self.device.send(&events)?;
+        let result = self.device.send(&events);
         self.held.clear();
         self.modifier = None;
         if disarm {
             self.device.disarm();
         }
-        Ok(())
+        result
     }
 }
 impl<D: Device> Drop for Keyboard<D> {
@@ -246,5 +246,26 @@ pub(crate) mod tests {
         k.device.fail = true;
         assert!(k.press(0, &[key("A", None)], 1.0).is_err());
         assert!(k.active().is_empty());
+    }
+    #[test]
+    fn failed_release_clears_ownership_before_another_game_session() {
+        let mut k = Keyboard::new(FakeDevice::default());
+        k.device.arm().unwrap();
+        k.press(0, &[key("A", Some("shift"))], 10.0).unwrap();
+        k.device.fail = true;
+        assert!(k.reset(true).is_err());
+        assert!(k.active().is_empty());
+        assert!(!k.device.armed);
+        k.device.fail = false;
+        k.device.arm().unwrap();
+        k.press(1, &[key("S", Some("shift"))], 20.0).unwrap();
+        assert_eq!(
+            k.device
+                .sent
+                .iter()
+                .filter(|event| event.scan == 0x2a && !event.up)
+                .count(),
+            2
+        );
     }
 }

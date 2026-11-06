@@ -6,6 +6,8 @@ pub enum PlaybackStatus {
     Idle,
     Loading,
     Countdown,
+    #[serde(rename = "waiting-for-game")]
+    WaitingForGame,
     Playing,
     Paused,
     Stopped,

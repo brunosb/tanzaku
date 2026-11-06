@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
+import { AboutPage } from '@/features/about/about-page'
 import { CatalogError } from '@/features/catalog/components/catalog-controls'
 import { LibraryPage } from '@/features/catalog/library/library-page'
 import { useCatalog } from '@/features/catalog/model/hooks'
@@ -8,6 +9,7 @@ import { PlaylistPage } from '@/features/catalog/playlists/playlist-page'
 import { PlaylistsPage } from '@/features/catalog/playlists/playlists-page'
 import { Player } from '@/features/playback/components/player'
 import { Transport } from '@/features/playback/components/transport'
+import { SettingsPage } from '@/features/settings/settings-page'
 import { reportError, run } from '@/shared/lib/report-error'
 import { Button } from '../shared/ui/button'
 import { SidebarProvider } from '../shared/ui/sidebar'
@@ -50,12 +52,24 @@ export function App({ runtime }: { runtime: Runtime }) {
             .catch(reportError)
         void runtime.api.settings
             .get()
-            .then((s) => setStorageRoot(s.storageRoot))
+            .then((s) => {
+                setStorageRoot(s.storageRoot)
+                if (s.shortcutWarnings?.length)
+                    toast.warning('Alguns atalhos estão indisponíveis.', {
+                        description: s.shortcutWarnings.join('\n'),
+                    })
+            })
             .catch(reportError)
     }, [runtime])
     useEffect(() => {
         if (
-            !['/player', '/library', '/playlists'].includes(route) &&
+            ![
+                '/player',
+                '/library',
+                '/playlists',
+                '/settings',
+                '/about',
+            ].includes(route) &&
             !playlistId
         ) {
             window.history.replaceState(null, '', '#/player')
@@ -129,7 +143,6 @@ export function App({ runtime }: { runtime: Runtime }) {
                             route,
                             playlistId,
                             storageRoot,
-                            openDialog,
                         }}
                     />
                     <div className="workspace">
@@ -156,7 +169,17 @@ export function App({ runtime }: { runtime: Runtime }) {
                             runtime={runtime}
                             route={route}
                         >
-                            {route === '/library' ? (
+                            {route === '/settings' ? (
+                                <SettingsPage
+                                    api={runtime.api}
+                                    storageRoot={storageRoot}
+                                    chooseDirectory={() =>
+                                        openDialog({ kind: 'storage' })
+                                    }
+                                />
+                            ) : route === '/about' ? (
+                                <AboutPage api={runtime.api} />
+                            ) : route === '/library' ? (
                                 <LibraryPage {...props} />
                             ) : route === '/playlists' ? (
                                 <PlaylistsPage {...props} />

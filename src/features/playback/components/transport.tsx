@@ -85,7 +85,8 @@ export function Transport({ runtime }: { runtime: PlaybackContext }) {
             if (
                 s.status === 'stopped' ||
                 s.status === 'loading' ||
-                s.status === 'countdown'
+                s.status === 'countdown' ||
+                s.status === 'waiting-for-game'
             )
                 gesture.current = null
             if (!gesture.current) {
@@ -120,7 +121,8 @@ export function Transport({ runtime }: { runtime: PlaybackContext }) {
             state.status === 'playing' ||
             (state.status === 'paused' && state.pauseReason === 'focus-lost')
         gesture.current = { resume }
-        if (resume) run(runtime.api.playback.pause())
+        if (resume && !state.backgroundPlaybackEnabled)
+            run(runtime.api.playback.pause())
     }
     const commit = () => {
         const active = gesture.current
@@ -134,7 +136,9 @@ export function Transport({ runtime }: { runtime: PlaybackContext }) {
         )
     }
     const playing = state.status === 'playing'
-    const busy = state.status === 'loading' || state.status === 'countdown'
+    const waiting =
+        state.status === 'waiting-for-game' || state.status === 'countdown'
+    const busy = state.status === 'loading' || waiting
     const queue = meta.queue
     return (
         <footer className="transport-bar">
@@ -214,23 +218,22 @@ export function Transport({ runtime }: { runtime: PlaybackContext }) {
                     </Control>
                     <Control
                         id="play-toggle"
-                        label={playing ? 'Pausar' : 'Reproduzir'}
+                        label={playing || waiting ? 'Pausar' : 'Reproduzir'}
                         className="transport-play"
                         size="icon"
                         disabled={
                             !meta.plan.events.length ||
-                            state.status === 'loading' ||
-                            state.status === 'countdown'
+                            state.status === 'loading'
                         }
                         onClick={() =>
                             run(
-                                playing
+                                playing || waiting
                                     ? runtime.api.playback.pause()
                                     : runtime.api.playback.play(),
                             )
                         }
                     >
-                        {playing ? <Pause /> : <Play />}
+                        {playing || waiting ? <Pause /> : <Play />}
                     </Control>
                     <Control
                         label="Próxima música"
@@ -354,7 +357,7 @@ export function Transport({ runtime }: { runtime: PlaybackContext }) {
                         disabled={
                             !state.duration ||
                             state.status === 'loading' ||
-                            state.status === 'countdown'
+                            waiting
                         }
                         onPointerDown={(e) => {
                             e.currentTarget.setPointerCapture(e.pointerId)

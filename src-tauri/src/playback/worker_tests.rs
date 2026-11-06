@@ -19,6 +19,8 @@ use std::{
 };
 #[derive(Clone, Default)]
 struct DeviceProbe {
+    game_focused: Arc<AtomicBool>,
+    reject_arm: Arc<AtomicBool>,
     focused: Arc<AtomicBool>,
     available: Arc<AtomicBool>,
     background: Arc<AtomicBool>,
@@ -27,10 +29,16 @@ struct DeviceProbe {
 }
 impl Device for DeviceProbe {
     fn arm(&mut self) -> Result<(), String> {
+        if self.reject_arm.load(Ordering::SeqCst) {
+            return Err("Foque wwm.exe".into());
+        }
         self.arms.fetch_add(1, Ordering::SeqCst);
         self.focused.store(true, Ordering::SeqCst);
         self.available.store(true, Ordering::SeqCst);
         Ok(())
+    }
+    fn game_focused(&self) -> bool {
+        self.game_focused.load(Ordering::SeqCst)
     }
     fn focused(&self) -> bool {
         self.focused.load(Ordering::SeqCst)
@@ -86,6 +94,19 @@ impl Harness {
         Self::with_save(loader, |_| Ok(()))
     }
     fn with_save(loader: Loader, save_background: fn(bool) -> Result<(), String>) -> Self {
+        Self::with_start(
+            loader,
+            save_background,
+            Duration::ZERO,
+            crate::preferences::StartPolicy::Countdown,
+        )
+    }
+    fn with_start(
+        loader: Loader,
+        save_background: fn(bool) -> Result<(), String>,
+        countdown: Duration,
+        start_mode: crate::preferences::StartPolicy,
+    ) -> Self {
         let (commands, rx) = mpsc::channel();
         let (tx, output) = mpsc::channel();
         let device = DeviceProbe::default();
@@ -98,7 +119,8 @@ impl Harness {
                 sender,
                 probe,
                 WorkerConfig {
-                    countdown: Duration::ZERO,
+                    countdown,
+                    start_mode,
                     loader,
                     auto_advance: Ok(false),
                     background_playback: Ok(false),
@@ -218,6 +240,169 @@ fn playlist_continues_without_countdown_or_rearming() {
         .state
         .active_event_indices
         .is_empty());
+}
+#[test]
+fn game_focus_requires_play_and_pause_or_stop_cancels_waiting() {
+    let h = Harness::new(Arc::new(|_| Ok(prepared("a", 0.0, 30.0))));
+    h.controller
+        .request(Action::StartMode(
+            crate::preferences::StartPolicy::GameFocus,
+        ))
+        .unwrap();
+    h.controller
+        .request(Action::Load("a".into(), None))
+        .unwrap();
+    h.device.game_focused.store(true, Ordering::SeqCst);
+    assert_eq!(
+        h.controller.request(Action::Snapshot).unwrap().state.status,
+        PlaybackStatus::Idle
+    );
+    h.device.game_focused.store(false, Ordering::SeqCst);
+    assert_eq!(
+        h.controller.request(Action::Play).unwrap().state.status,
+        PlaybackStatus::WaitingForGame
+    );
+    assert_eq!(h.device.arms.load(Ordering::SeqCst), 0);
+    h.controller.request(Action::Pause).unwrap();
+    h.device.game_focused.store(true, Ordering::SeqCst);
+    assert_eq!(
+        h.controller.request(Action::Snapshot).unwrap().state.status,
+        PlaybackStatus::Paused
+    );
+    h.device.game_focused.store(false, Ordering::SeqCst);
+    h.controller.request(Action::Play).unwrap();
+    h.controller.request(Action::Stop).unwrap();
+    h.device.game_focused.store(true, Ordering::SeqCst);
+    assert_eq!(
+        h.controller.request(Action::Snapshot).unwrap().state.status,
+        PlaybackStatus::Stopped
+    );
+    h.controller.request(Action::Play).unwrap();
+    h.wait(|n| matches!(n, Notice::State(s) if s.status == PlaybackStatus::Playing));
+    assert_eq!(h.device.arms.load(Ordering::SeqCst), 1);
+}
+#[test]
+fn countdown_rejects_the_wrong_target_without_sending_notes() {
+    let h = Harness::new(Arc::new(|_| Ok(prepared("a", 0.0, 30.0))));
+    h.device.reject_arm.store(true, Ordering::SeqCst);
+    h.controller
+        .request(Action::Load("a".into(), None))
+        .unwrap();
+    h.controller.request(Action::Play).unwrap();
+    h.wait(|n| matches!(n, Notice::State(s) if s.status == PlaybackStatus::Paused && s.error.is_some()));
+    assert!(h
+        .device
+        .strokes
+        .lock()
+        .unwrap()
+        .iter()
+        .all(|stroke| stroke.up));
+}
+#[test]
+fn countdown_starts_at_three_and_policy_changes_apply_on_the_next_start() {
+    let h = Harness::with_start(
+        Arc::new(|_| Ok(prepared("a", 0.0, 30.0))),
+        |_| Ok(()),
+        Duration::from_secs(3),
+        crate::preferences::StartPolicy::Countdown,
+    );
+    h.controller
+        .request(Action::Load("a".into(), None))
+        .unwrap();
+    let countdown = h.controller.request(Action::Play).unwrap();
+    assert_eq!(countdown.state.countdown_remaining, 3);
+    h.controller
+        .request(Action::StartMode(
+            crate::preferences::StartPolicy::GameFocus,
+        ))
+        .unwrap();
+    assert_eq!(
+        h.controller.request(Action::Snapshot).unwrap().state.status,
+        PlaybackStatus::Countdown
+    );
+    h.controller.request(Action::Stop).unwrap();
+    assert_eq!(
+        h.controller.request(Action::Play).unwrap().state.status,
+        PlaybackStatus::WaitingForGame
+    );
+    assert_eq!(h.device.arms.load(Ordering::SeqCst), 0);
+}
+#[test]
+fn background_seek_resume_load_playlist_and_skips_reuse_one_target() {
+    let loader = library_loader();
+    let h = Harness::new(Arc::new(move |spec| match spec {
+        LoadSpec::Playlist(_, _) => {
+            let mut p = prepared("a", 0.0, 30.0);
+            p.queue = Some(test_queue(vec!["a".into(), "b".into()]));
+            Ok(p)
+        }
+        spec => loader(spec),
+    }));
+    h.controller
+        .request(Action::BackgroundPlayback(true))
+        .unwrap();
+    h.controller
+        .request(Action::Load("a".into(), None))
+        .unwrap();
+    h.controller.request(Action::Play).unwrap();
+    h.wait(|n| matches!(n, Notice::State(s) if s.status == PlaybackStatus::Playing));
+    h.device.focused.store(false, Ordering::SeqCst);
+    for action in [
+        Action::Seek(1.0, true),
+        Action::Pause,
+        Action::Play,
+        Action::Next,
+        Action::Previous,
+        Action::Load("b".into(), None),
+        Action::Playlist("p".into(), false),
+    ] {
+        let paused = matches!(action, Action::Pause);
+        let snapshot = h.controller.request(action).unwrap();
+        assert_eq!(
+            snapshot.state.status,
+            if paused {
+                PlaybackStatus::Paused
+            } else {
+                PlaybackStatus::Playing
+            }
+        );
+        assert_eq!(snapshot.state.countdown_remaining, 0);
+        assert_eq!(h.device.arms.load(Ordering::SeqCst), 1);
+    }
+    h.controller.request(Action::Stop).unwrap();
+    assert!(!h.device.available.load(Ordering::SeqCst));
+    assert_eq!(
+        h.controller
+            .request(Action::Snapshot)
+            .unwrap()
+            .state
+            .position,
+        0.0
+    );
+}
+#[test]
+fn relative_seek_uses_native_position_and_preserves_pause_and_limits() {
+    let h = Harness::new(Arc::new(|_| Ok(prepared("a", 0.0, 30.0))));
+    h.controller
+        .request(Action::BackgroundPlayback(true))
+        .unwrap();
+    h.controller
+        .request(Action::Load("a".into(), None))
+        .unwrap();
+    h.controller.request(Action::Play).unwrap();
+    h.wait(|n| matches!(n, Notice::State(s) if s.status == PlaybackStatus::Playing));
+    h.controller.request(Action::Seek(10.0, true)).unwrap();
+    let forward = h.controller.request(Action::SeekRelative(5.0)).unwrap();
+    assert!(forward.state.position >= 15.0 && forward.state.position < 16.0);
+    assert_eq!(forward.state.status, PlaybackStatus::Playing);
+    h.controller.request(Action::Pause).unwrap();
+    let start = h.controller.request(Action::SeekRelative(-100.0)).unwrap();
+    assert_eq!(start.state.position, 0.0);
+    assert_eq!(start.state.status, PlaybackStatus::Paused);
+    let end = h.controller.request(Action::SeekRelative(100.0)).unwrap();
+    assert_eq!(end.state.position, 30.0);
+    assert_eq!(end.state.status, PlaybackStatus::Paused);
+    assert_eq!(h.device.arms.load(Ordering::SeqCst), 1);
 }
 #[test]
 fn focus_loss_pauses_even_before_next_attack() {

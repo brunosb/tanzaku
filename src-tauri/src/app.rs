@@ -6,13 +6,36 @@ use crate::{
 use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    app.state::<crate::shortcuts::Shortcuts>()
+                        .handle(app, shortcut, event.state());
+                })
+                .build(),
+        )
         .setup(|app| {
             app.manage(youtube::Jobs::default());
             app.manage(PlaybackController::new(app.handle().clone()));
+            app.manage(crate::shortcuts::Shortcuts::default());
+            let preferences = {
+                let _guard = crate::library::transaction()?;
+                crate::library::read_settings()
+                    .and_then(|s| crate::preferences::Preferences::from_value(&s))
+            };
+            match preferences {
+                Ok(preferences) => app
+                    .state::<crate::shortcuts::Shortcuts>()
+                    .restore(app.handle(), &preferences.shortcuts),
+                Err(error) => eprintln!("Configurações: {error}"),
+            }
             youtube::start_update(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::about::app_info,
+            commands::about::app_open_project_link,
             commands::library::library_list,
             commands::library::library_import,
             commands::library::library_rename,

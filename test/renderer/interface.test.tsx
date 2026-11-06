@@ -285,14 +285,22 @@ test('storage switch resets views, selection and native snapshot after confirmed
         screen.getByRole('checkbox', { name: 'Selecionar Águas do Céu' }),
     )
     await h.user.type(screen.getByRole('searchbox'), 'aguas')
-    await h.user.click(screen.getByRole('button', { name: 'Armazenamento' }))
+    await h.user.click(screen.getByRole('link', { name: 'Configurações' }))
+    await h.user.click(
+        await screen.findByRole('button', { name: 'Alterar pasta' }),
+    )
     const dialog = screen.getByRole('alertdialog')
     await h.user.click(
         within(dialog).getByRole('button', { name: 'Escolher pasta' }),
     )
-    await screen.findByRole('heading', {
-        name: 'Seu próximo acorde começa aqui',
-    })
+    await waitFor(() =>
+        expect(document.querySelector('.storage-path')).toHaveTextContent(
+            'C:/new',
+        ),
+    )
+    expect(
+        screen.getByRole('heading', { name: 'Configurações' }),
+    ).toBeInTheDocument()
     expect(h.runtime.navigation.views.size).toBe(0)
     expect(h.runtime.catalog.get().entries).toEqual([])
     await h.user.click(screen.getByRole('link', { name: 'Biblioteca' }))

@@ -33,7 +33,6 @@ mod platform {
         fn GetForegroundWindow() -> isize;
         fn GetWindowThreadProcessId(hwnd: isize, pid: *mut u32) -> u32;
         fn SendInput(count: u32, inputs: *const Input, size: i32) -> u32;
-        fn GetAsyncKeyState(key: i32) -> i16;
         fn IsWindow(hwnd: isize) -> i32;
         fn IsIconic(hwnd: isize) -> i32;
         fn IsWindowVisible(hwnd: isize) -> i32;
@@ -46,6 +45,89 @@ mod platform {
         ) -> i32;
         fn MapVirtualKeyW(code: u32, kind: u32) -> u32;
         fn PostMessageW(hwnd: isize, message: u32, wparam: usize, lparam: isize) -> i32;
+    }
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, process: u32) -> *mut std::ffi::c_void;
+        fn QueryFullProcessImageNameW(
+            process: *mut std::ffi::c_void,
+            flags: u32,
+            name: *mut u16,
+            size: *mut u32,
+        ) -> i32;
+        fn CloseHandle(handle: *mut std::ffi::c_void) -> i32;
+        fn CreateToolhelp32Snapshot(flags: u32, process: u32) -> *mut std::ffi::c_void;
+        fn Process32FirstW(snapshot: *mut std::ffi::c_void, entry: *mut ProcessEntry) -> i32;
+        fn Process32NextW(snapshot: *mut std::ffi::c_void, entry: *mut ProcessEntry) -> i32;
+    }
+    #[repr(C)]
+    struct ProcessEntry {
+        size: u32,
+        usage: u32,
+        process: u32,
+        heap: usize,
+        module: u32,
+        threads: u32,
+        parent: u32,
+        priority: i32,
+        flags: u32,
+        executable: [u16; 260],
+    }
+    struct Handle(*mut std::ffi::c_void);
+    impl Drop for Handle {
+        fn drop(&mut self) {
+            unsafe {
+                CloseHandle(self.0);
+            }
+        }
+    }
+    fn game_process(process: u32) -> bool {
+        if process == 0 || process == std::process::id() {
+            return false;
+        }
+        let handle = unsafe { OpenProcess(0x1000, 0, process) };
+        if !handle.is_null() {
+            let handle = Handle(handle);
+            let mut buffer = vec![0u16; 32768];
+            let mut size = buffer.len() as u32;
+            if unsafe { QueryFullProcessImageNameW(handle.0, 0, buffer.as_mut_ptr(), &mut size) }
+                != 0
+            {
+                let path = String::from_utf16_lossy(&buffer[..size as usize]);
+                return path
+                    .rsplit('\\')
+                    .next()
+                    .is_some_and(|name| name.eq_ignore_ascii_case("wwm.exe"));
+            }
+        }
+        // Process enumeration also identifies elevated games without reading their memory.
+        let snapshot = unsafe { CreateToolhelp32Snapshot(2, 0) };
+        if snapshot == -1isize as *mut std::ffi::c_void {
+            return false;
+        }
+        let snapshot = Handle(snapshot);
+        let mut entry = ProcessEntry {
+            size: std::mem::size_of::<ProcessEntry>() as u32,
+            usage: 0,
+            process: 0,
+            heap: 0,
+            module: 0,
+            threads: 0,
+            parent: 0,
+            priority: 0,
+            flags: 0,
+            executable: [0; 260],
+        };
+        let mut found = unsafe { Process32FirstW(snapshot.0, &mut entry) } != 0;
+        while found {
+            if entry.process == process {
+                let end = entry.executable.iter().position(|&c| c == 0).unwrap_or(260);
+                return String::from_utf16_lossy(&entry.executable[..end])
+                    .eq_ignore_ascii_case("wwm.exe");
+            }
+            found = unsafe { Process32NextW(snapshot.0, &mut entry) } != 0;
+        }
+        false
     }
     fn pid(hwnd: isize) -> u32 {
         let mut value = 0;
@@ -141,12 +223,18 @@ mod platform {
         }
     }
     impl Device for NativeDevice {
+        fn game_focused(&self) -> bool {
+            let window = unsafe { GetForegroundWindow() };
+            window != 0 && unsafe { IsIconic(window) } == 0 && game_process(pid(window))
+        }
         fn arm(&mut self) -> Result<(), String> {
             self.target = None;
             let primary = unsafe { GetForegroundWindow() };
             let process = pid(primary);
-            if process == 0 || process == std::process::id() || unsafe { IsIconic(primary) } != 0 {
-                return Err("Foque a janela do jogo durante a contagem.".to_string());
+            if !game_process(process) || unsafe { IsIconic(primary) } != 0 {
+                return Err(
+                    "Foque a janela de Where Winds Meet (wwm.exe) para começar.".to_string()
+                );
             }
             let mut target = Target {
                 primary,
@@ -183,16 +271,6 @@ mod platform {
         }
         fn disarm(&mut self) {
             self.target = None;
-        }
-        fn shortcuts(&self) -> (bool, bool) {
-            unsafe {
-                let enabled =
-                    !self.background || (GetAsyncKeyState(0x11) < 0 && GetAsyncKeyState(0x12) < 0);
-                (
-                    enabled && GetAsyncKeyState(0x24) < 0,
-                    enabled && GetAsyncKeyState(0x23) < 0,
-                )
-            }
         }
         fn send(&mut self, events: &[Stroke]) -> Result<(), String> {
             let Some(target) = &self.target else {

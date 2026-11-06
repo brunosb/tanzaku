@@ -12,6 +12,7 @@ use std::{
 pub(super) type Loader = std::sync::Arc<dyn Fn(LoadSpec) -> Result<Prepared, String> + Send + Sync>;
 pub(super) struct WorkerConfig {
     pub(super) countdown: Duration,
+    pub(super) start_mode: crate::preferences::StartPolicy,
     pub(super) loader: Loader,
     pub(super) auto_advance: Result<bool, String>,
     pub(super) background_playback: Result<bool, String>,
@@ -26,7 +27,13 @@ impl Default for WorkerConfig {
                 settings["backgroundPlaybackEnabled"] = serde_json::json!(enabled);
                 storage::write_settings_at(&storage::storage_root()?, settings)
             },
-            countdown: Duration::from_secs(5),
+            start_mode: (|| {
+                let _guard = storage::transaction()?;
+                crate::preferences::Preferences::from_value(&storage::read_settings()?)
+                    .map(|p| p.start_mode)
+            })()
+            .unwrap_or_default(),
+            countdown: Duration::from_secs(3),
             loader: std::sync::Arc::new(prepare),
             auto_advance: (|| {
                 let _guard = storage::transaction()?;

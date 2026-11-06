@@ -1,3 +1,4 @@
+pub(crate) mod about;
 pub(crate) mod library;
 pub(crate) mod playback;
 pub(crate) mod playlists;

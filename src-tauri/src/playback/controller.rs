@@ -24,6 +24,8 @@ pub enum Action {
     Pause,
     Stop,
     Seek(f64, bool),
+    SeekRelative(f64),
+    StartMode(crate::preferences::StartPolicy),
     Speed(f64),
     Repeat,
     Clear,
